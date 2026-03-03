@@ -15,7 +15,11 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 - **Env var:** `STRIPE_WEBHOOK_SECRET`
 - **Where:** [Webhooks](https://dashboard.stripe.com/webhooks) → Add endpoint (or open existing) → “Reveal” signing secret.
 - **Endpoint URL:** `https://<your-domain>/api/payments/webhook`  
-  The server uses this to verify `checkout.session.completed` and award credits.
+  The server handles these events:
+  - `checkout.session.completed` – fires when checkout completes; awards credits when `payment_status === "paid"` (card payments settle immediately).
+  - `checkout.session.async_payment_succeeded` – fires when an async payment method (bank transfer, ACH, SEPA debit, etc.) settles after the initial checkout; awards credits at that point.
+  
+  Register **both** events in your Stripe webhook endpoint configuration, or use `*` to receive all events.
 - Value starts with `whsec_`. Set it in env/secrets; do not commit.
 
 ## Optional

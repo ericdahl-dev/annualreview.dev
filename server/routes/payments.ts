@@ -6,6 +6,13 @@
  *
  * Required env vars: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (webhook only).
  * Optional: STRIPE_PRICE_CENTS (default 100 = $1.00), STRIPE_CURRENCY (default "usd").
+ *
+ * Webhook events handled:
+ *   checkout.session.completed           – fires immediately on checkout; awards credits when
+ *                                          payment_status === "paid" (card payments).
+ *   checkout.session.async_payment_succeeded – fires when an async payment method (bank transfer,
+ *                                          ACH, SEPA debit, etc.) settles after the initial
+ *                                          checkout.session.completed; awards credits at that point.
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
@@ -202,10 +209,16 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           return;
         }
         const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-        if (event.type === "checkout.session.completed") {
+        if (
+          event.type === "checkout.session.completed" ||
+          event.type === "checkout.session.async_payment_succeeded"
+        ) {
           const session = event.data.object as Stripe.Checkout.Session;
           // Award credits to the GitHub user who initiated the checkout.
           // user_login is stored in metadata when creating the checkout session.
+          // For checkout.session.completed, only award if payment_status is already "paid"
+          // (card payments).  For checkout.session.async_payment_succeeded the payment has
+          // settled by the time this event fires, so payment_status will always be "paid".
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             awardCredits(userLogin, session.id);
