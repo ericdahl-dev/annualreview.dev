@@ -146,6 +146,9 @@ function apiRoutesPlugin() {
           createJob,
           runInBackground,
           runPipeline,
+          getSessionIdFromRequest: (r) =>
+            getSessionIdFromRequest(r, sessionSecret),
+          getSession,
         })
       );
 

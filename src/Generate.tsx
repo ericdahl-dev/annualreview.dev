@@ -97,17 +97,14 @@ export default function Generate() {
       .catch(() => setPaymentsEnabled(false));
   }, []);
 
-  // Check how many credits remain for any previously-stored Stripe session
+  // Fetch remaining credits when payments are enabled and user is logged in (session cookie identifies user)
   useEffect(() => {
-    if (!paymentsEnabled) return;
-    let sessionId: string | null = null;
-    try { sessionId = localStorage.getItem("premium_stripe_session_id"); } catch { /* ignore */ }
-    if (!sessionId) return;
-    fetch(`/api/payments/credits/${encodeURIComponent(sessionId)}`)
+    if (!paymentsEnabled || !user) return;
+    fetch("/api/payments/credits", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : { credits: 0 }))
       .then((data: { credits?: number }) => setPremiumCredits(data.credits ?? 0))
-      .catch(() => {});
-  }, [paymentsEnabled]);
+      .catch(() => setPremiumCredits(0));
+  }, [paymentsEnabled, user]);
 
   const {
     collectStart,
@@ -677,9 +674,9 @@ yarn normalize --input raw.json --output evidence.json`}
                   className="generate-btn generate-btn-premium"
                   onClick={handleUpgradeToPremium}
                   disabled={loading}
-                  title={`${creditsPerPurchase} premium run${creditsPerPurchase !== 1 ? "s" : ""} for $${(priceCents / 100).toFixed(2)} — uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model`}
+                  title={`${creditsPerPurchase} credits for $${(priceCents / 100).toFixed(2)} (1 run = 1 credit). Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model.`}
                 >
-                  ✦ Upgrade to premium — {creditsPerPurchase} run{creditsPerPurchase !== 1 ? "s" : ""} (${(priceCents / 100).toFixed(2)})
+                  ✦ Upgrade to premium — {creditsPerPurchase} credits for ${(priceCents / 100).toFixed(2)}
                 </button>
               )
             )}

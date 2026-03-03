@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
 import { PostHog } from "posthog-node";
 import Stripe from "stripe";
-import { awardCredits, getCredits, CREDITS_PER_PURCHASE } from "../../lib/payment-store.js";
+import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/run-pipeline.js";
 
 const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
@@ -106,15 +106,15 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
       respondJson(res, 200, {
         enabled,
         price_cents: Number(process.env.STRIPE_PRICE_CENTS) || 100,
-        credits_per_purchase: CREDITS_PER_PURCHASE,
+        credits_per_purchase: getCreditsPerPurchase(),
         free_model: freeModel,
         premium_model: premiumModel,
       });
       return;
     }
 
-    // GET /credits – returns remaining credits for the logged-in user
-    if (path === "credits" && req.method === "GET") {
+    // GET /credits or GET /credits/:anything – returns remaining credits for the logged-in user
+    if ((path === "credits" || path.startsWith("credits/")) && req.method === "GET") {
       const sessId = getSessionIdFromRequest(req);
       const userSession = sessId ? getSession(sessId) : undefined;
       if (!userSession?.login) {
@@ -175,7 +175,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
                 unit_amount: priceCents,
                 product_data: {
                   name: "Premium Annual Review Report",
-                  description: `${CREDITS_PER_PURCHASE} higher-quality AI report runs using a state-of-the-art model`,
+                  description: `${getCreditsPerPurchase()} higher-quality AI report runs using a state-of-the-art model`,
                 },
               },
             },

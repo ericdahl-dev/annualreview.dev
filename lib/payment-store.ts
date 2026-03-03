@@ -14,7 +14,10 @@
 
 import type { Pool } from "pg";
 
-export const CREDITS_PER_PURCHASE = Number(process.env.CREDITS_PER_PURCHASE) || 1;
+/** Read at runtime so Vite dev (which copies .env after modules load) sees the correct value. */
+export function getCreditsPerPurchase(): number {
+  return Number(process.env.CREDITS_PER_PURCHASE) || 1;
+}
 
 let pool: Pool | null = null;
 
@@ -53,7 +56,7 @@ async function getPool(): Promise<Pool> {
 export async function awardCredits(
   userLogin: string,
   stripeSessionId: string,
-  count = CREDITS_PER_PURCHASE
+  count = getCreditsPerPurchase()
 ): Promise<void> {
   const p = await getPool();
   const awardedAt = new Date().toISOString();
