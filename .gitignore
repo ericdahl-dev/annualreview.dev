@@ -11,6 +11,9 @@ dist/
 *.log
 .DS_Store
 
+# SQLite databases (runtime artifacts)
+*.db
+
 # Frontend / Node
 coverage/
 .vite/
