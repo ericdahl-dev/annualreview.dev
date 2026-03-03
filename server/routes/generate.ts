@@ -1,7 +1,7 @@
 /**
  * Generate API: POST / - validate evidence, create job, run pipeline in background.
  *
- * Premium generation ($1 for 5 credits, stored in SQLite):
+ * Premium generation ($1 for 5 credits, stored in Postgres via DATABASE_URL):
  *   - The user must be logged in (GitHub OAuth) to use premium.
  *   - On the post-Stripe-redirect call, the client passes _stripe_session_id so
  *     the server can verify payment and award credits if the webhook hasn't fired yet.
@@ -64,7 +64,7 @@ async function verifyAndAwardFromStripe(
       session.payment_status === "paid" &&
       session.metadata?.user_login === expectedUserLogin
     ) {
-      awardCredits(expectedUserLogin, stripeSessionId);
+      await awardCredits(expectedUserLogin, stripeSessionId);
       return true;
     }
   } catch {
@@ -134,7 +134,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
         const userLogin = userSession.login;
 
         // Fast path: user already has credits in the DB
-        let debited = deductCredit(userLogin);
+        let debited = await deductCredit(userLogin);
 
         if (!debited && stripeSessionId) {
           // Slow path: webhook may not have fired yet — verify directly with Stripe
@@ -143,7 +143,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
             respondJson(res, 402, { error: "Payment required or session not found" });
             return;
           }
-          debited = deductCredit(userLogin);
+          debited = await deductCredit(userLogin);
         }
 
         if (!debited) {
@@ -151,7 +151,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
           return;
         }
         premium = true;
-        creditsRemaining = getCredits(userLogin);
+        creditsRemaining = await getCredits(userLogin);
       }
 
       const jobId = createJob(premium ? "generate-premium" : "generate");
