@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getCreditsPerPurchase } from "../lib/payment-store.ts";
 import { paymentsRoutes } from "../server/routes/payments.ts";
 
 function mockRes(status = 200) {
@@ -54,7 +55,7 @@ describe("paymentsRoutes – config", () => {
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ enabled: false, price_cents: 100, credits_per_purchase: 1 });
+    expect(res.body).toMatchObject({ enabled: false, price_cents: 100, credits_per_purchase: getCreditsPerPurchase() });
   });
 
   it("returns enabled:false when feature flag is off", async () => {
@@ -81,7 +82,7 @@ describe("paymentsRoutes – config", () => {
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ enabled: true, price_cents: 100, credits_per_purchase: 1 });
+    expect(res.body).toMatchObject({ enabled: true, price_cents: 100, credits_per_purchase: getCreditsPerPurchase() });
   });
 });
 
