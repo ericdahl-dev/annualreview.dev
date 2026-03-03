@@ -61,6 +61,8 @@ function apiRoutesPlugin() {
         process.env.STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
       if (env.STRIPE_WEBHOOK_SECRET !== undefined)
         process.env.STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
+      if (env.CREDITS_PER_PURCHASE !== undefined)
+        process.env.CREDITS_PER_PURCHASE = env.CREDITS_PER_PURCHASE;
       const sessionSecret =
         env.SESSION_SECRET || process.env.SESSION_SECRET || "dev-secret";
       const clientId = env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID;
@@ -168,4 +170,7 @@ function apiRoutesPlugin() {
 export default defineConfig({
   plugins: [react(), apiRoutesPlugin()],
   envPrefix: ["VITE_", "POSTHOG"],
+  server: {
+    allowedHosts: ["skeyelab.ngrok.io"],
+  },
 });

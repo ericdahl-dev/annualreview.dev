@@ -467,9 +467,21 @@
 
 .generate-actions {
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.generate-actions-buttons {
+  display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
+}
+
+.generate-models-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .generate-btn-premium {

@@ -59,24 +59,19 @@ describe("runPipeline", () => {
     process.env.POSTHOG_API_KEY = "ph_test";
   });
 
-  it("throws when both OPENAI_API_KEY and OPENROUTER_API_KEY are missing", async () => {
-    const origOAI = process.env.OPENAI_API_KEY;
+  it("throws when OPENROUTER_API_KEY is missing", async () => {
     const origOR = process.env.OPENROUTER_API_KEY;
-    delete process.env.OPENAI_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
     try {
-      await expect(runPipeline({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] })).rejects.toThrow("OPENAI_API_KEY or OPENROUTER_API_KEY required");
+      await expect(runPipeline({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] })).rejects.toThrow("OPENROUTER_API_KEY required");
     } finally {
-      if (origOAI !== undefined) process.env.OPENAI_API_KEY = origOAI;
       if (origOR !== undefined) process.env.OPENROUTER_API_KEY = origOR;
     }
   });
 
-  it("uses OPENROUTER_API_KEY with OpenRouter base URL when provided", async () => {
+  it("uses OPENROUTER_API_KEY with OpenRouter base URL", async () => {
     const origOR = process.env.OPENROUTER_API_KEY;
-    const origOAI = process.env.OPENAI_API_KEY;
     process.env.OPENROUTER_API_KEY = "sk-or-test";
-    delete process.env.OPENAI_API_KEY;
     try {
       const evidence = {
         timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
@@ -87,15 +82,12 @@ describe("runPipeline", () => {
     } finally {
       if (origOR !== undefined) process.env.OPENROUTER_API_KEY = origOR;
       else delete process.env.OPENROUTER_API_KEY;
-      if (origOAI !== undefined) process.env.OPENAI_API_KEY = origOAI;
     }
   });
 
-  it("sets posthogProviderOverride=openrouter when PostHog and OpenRouter are both active", async () => {
+  it("sets posthogProviderOverride=openrouter when PostHog is active", async () => {
     const origOR = process.env.OPENROUTER_API_KEY;
-    const origOAI = process.env.OPENAI_API_KEY;
     process.env.OPENROUTER_API_KEY = "sk-or-test";
-    delete process.env.OPENAI_API_KEY;
     try {
       await runPipeline({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] });
       expect(lastCreateArgs.length).toBe(4);
@@ -105,22 +97,10 @@ describe("runPipeline", () => {
     } finally {
       if (origOR !== undefined) process.env.OPENROUTER_API_KEY = origOR;
       else delete process.env.OPENROUTER_API_KEY;
-      if (origOAI !== undefined) process.env.OPENAI_API_KEY = origOAI;
     }
   });
 
-  it("does not set posthogProviderOverride when using OpenAI directly", async () => {
-    const evidence = {
-      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
-      contributions: [],
-    };
-    await runPipeline(evidence, { apiKey: "sk-test" });
-    for (const args of lastCreateArgs) {
-      expect(args).not.toHaveProperty("posthogProviderOverride");
-    }
-  });
-
-  it("returns themes, bullets, stories, self_eval with mocked OpenAI", async () => {
+  it("returns themes, bullets, stories, self_eval with mocked client", async () => {
     const evidence = {
       timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
       contributions: [],

@@ -13,6 +13,7 @@ import type { SessionData } from "../../lib/session-store.js";
 import { PostHog } from "posthog-node";
 import Stripe from "stripe";
 import { awardCredits, getCredits, CREDITS_PER_PURCHASE } from "../../lib/payment-store.js";
+import { getDefaultModels } from "../../lib/run-pipeline.js";
 
 const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
 
@@ -101,10 +102,13 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         getSession
       );
       const enabled = stripeConfigured && flagEnabled;
+      const { free: freeModel, premium: premiumModel } = getDefaultModels();
       respondJson(res, 200, {
         enabled,
         price_cents: Number(process.env.STRIPE_PRICE_CENTS) || 100,
         credits_per_purchase: CREDITS_PER_PURCHASE,
+        free_model: freeModel,
+        premium_model: premiumModel,
       });
       return;
     }
@@ -188,6 +192,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     }
 
     if (path === "webhook" && req.method === "POST") {
+      console.error("[payments] webhook received");
       const stripe = getStripe();
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       if (!stripe || !webhookSecret) {
@@ -202,18 +207,24 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           return;
         }
         const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+        console.error("[payments] webhook event:", event.type, event.id);
         if (event.type === "checkout.session.completed") {
           const session = event.data.object as Stripe.Checkout.Session;
-          // Award credits to the GitHub user who initiated the checkout.
-          // user_login is stored in metadata when creating the checkout session.
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             awardCredits(userLogin, session.id);
+            console.error("[payments] credits awarded:", userLogin, session.id);
+          } else {
+            console.error("[payments] checkout.session.completed skipped:", {
+              payment_status: session.payment_status,
+              user_login: userLogin ?? null,
+            });
           }
         }
         respondJson(res, 200, { received: true });
       } catch (e) {
         const err = e as Error;
+        console.error("[payments] webhook error:", err.message);
         respondJson(res, 400, { error: err.message || "Webhook error" });
       }
       return;

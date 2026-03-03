@@ -1,6 +1,6 @@
 /**
  * Four-step pipeline: evidence JSON → themes → bullets → STAR stories → self_eval.
- * Each step uses one prompt from prompts/ and passes previous outputs forward. Needs OPENAI_API_KEY.
+ * Uses OpenRouter with Claude models (free: Haiku, premium: Sonnet). Requires OPENROUTER_API_KEY.
  */
 
 import { createHash } from "crypto";
@@ -189,27 +189,31 @@ export interface PipelineOptions {
   posthogDistinctId?: string;
 }
 
+/** Default model ids for free and premium (OpenRouter + Claude). */
+export function getDefaultModels(): { free: string; premium: string } {
+  return {
+    free: process.env.LLM_MODEL ?? "anthropic/claude-3-haiku",
+    premium: process.env.PREMIUM_LLM_MODEL ?? "anthropic/claude-3.5-sonnet",
+  };
+}
+
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+
 export async function runPipeline(
   evidence: Evidence,
   {
-    apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY,
+    apiKey = process.env.OPENROUTER_API_KEY,
     model,
-    baseURL = process.env.OPENROUTER_API_KEY ? "https://openrouter.ai/api/v1" : undefined,
+    baseURL = OPENROUTER_BASE,
     premium = false,
     onProgress,
     posthogTraceId,
     posthogDistinctId,
   }: PipelineOptions = {}
 ): Promise<PipelineResult> {
-  if (!apiKey) throw new Error("OPENAI_API_KEY or OPENROUTER_API_KEY required");
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY required");
 
-  // Resolve model: explicit > env override > premium/free defaults based on provider
-  const useOpenRouter = !!process.env.OPENROUTER_API_KEY;
-  const resolvedModel = model ?? (
-    premium
-      ? (process.env.PREMIUM_LLM_MODEL ?? (useOpenRouter ? "anthropic/claude-3.5-sonnet" : "gpt-4o"))
-      : (process.env.LLM_MODEL ?? (useOpenRouter ? "anthropic/claude-3-haiku" : "gpt-4o-mini"))
-  );
+  const resolvedModel = model ?? getDefaultModels()[premium ? "premium" : "free"];
 
   const key = cacheKey(evidence, resolvedModel);
   const cached = resultCache.get(key);
