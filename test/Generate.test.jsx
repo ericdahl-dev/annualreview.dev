@@ -162,7 +162,7 @@ describe("Generate", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /premium/i })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /1 run \(/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /1 credits for \$1\.00/i })).toBeInTheDocument();
   });
 });
 
