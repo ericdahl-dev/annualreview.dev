@@ -38,6 +38,36 @@ OUTPUT (valid JSON only):
         "name": "Work Quality and Expertise",
         "text": "string",
         "evidence": [{ "id": "string", "url": "string" }]
+      },
+      {
+        "id": "judgment",
+        "name": "Judgment and Decision Making",
+        "text": "string",
+        "evidence": [{ "id": "string", "url": "string" }]
+      },
+      {
+        "id": "initiative",
+        "name": "Initiative",
+        "text": "string",
+        "evidence": [{ "id": "string", "url": "string" }]
+      },
+      {
+        "id": "creativity",
+        "name": "Creativity and Innovation",
+        "text": "string",
+        "evidence": [{ "id": "string", "url": "string" }]
+      },
+      {
+        "id": "communication",
+        "name": "Communication",
+        "text": "string",
+        "evidence": [{ "id": "string", "url": "string" }]
+      },
+      {
+        "id": "teamwork",
+        "name": "Teamwork",
+        "text": "string",
+        "evidence": [{ "id": "string", "url": "string" }]
       }
     ]
   },
@@ -49,8 +79,8 @@ RULES:
 - Keep each section concise and form-friendly.
 - Evidence should back claims; if evidence doesn’t exist, ask a question instead.
 - Next year goals can be inferred from themes, but MUST ask for confirmation.
- - For each performance dimension, prefer 1–3 sentences grounded in the provided contributions/themes/bullets/stories.
- - For any performance dimension where relevant evidence is thin or ambiguous, explicitly label statements as "Potential impact (needs confirmation)" and add a clarifying question to missing_info_questions.
+- For each performance dimension, prefer 1–3 sentences grounded in the provided contributions/themes/bullets/stories.
+- For any performance dimension where relevant evidence is thin or ambiguous, explicitly label statements as "Potential impact (needs confirmation)" and add a clarifying question to missing_info_questions.
 
 PERFORMANCE DIMENSIONS RUBRIC:
 
