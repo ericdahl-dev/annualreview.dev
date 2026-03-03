@@ -14,9 +14,9 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 
 - **Env var:** `STRIPE_WEBHOOK_SECRET`
 - **Where:** [Webhooks](https://dashboard.stripe.com/webhooks) → Add endpoint (or open existing) → “Reveal” signing secret.
-- **Endpoint URL:** `https://<your-domain>/api/payments/webhook`  
-  The server uses this to verify `checkout.session.completed` and award credits.
-- Value starts with `whsec_`. Set it in env/secrets; do not commit.
+- **Endpoint URL (production):** `https://annualreview.dev/api/payments/webhook`  
+  Configure this in Stripe Dashboard so Stripe can send `checkout.session.completed`; the server verifies the signature and awards credits.
+- Value starts with `whsec_`. Set it in env/secrets (e.g. Coolify) for production; do not commit.
 
 ## Optional
 

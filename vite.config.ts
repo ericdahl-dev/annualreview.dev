@@ -45,6 +45,7 @@ import { authRoutes } from "./server/routes/auth.ts";
 import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
+import { paymentsRoutes } from "./server/routes/payments.ts";
 
 function apiRoutesPlugin() {
   return {
@@ -56,6 +57,10 @@ function apiRoutesPlugin() {
         process.env.POSTHOG_API_KEY = env.POSTHOG_API_KEY;
       if (env.POSTHOG_HOST !== undefined)
         process.env.POSTHOG_HOST = env.POSTHOG_HOST;
+      if (env.STRIPE_SECRET_KEY !== undefined)
+        process.env.STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
+      if (env.STRIPE_WEBHOOK_SECRET !== undefined)
+        process.env.STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
       const sessionSecret =
         env.SESSION_SECRET || process.env.SESSION_SECRET || "dev-secret";
       const clientId = env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID;
@@ -144,6 +149,16 @@ function apiRoutesPlugin() {
           createJob,
           runInBackground,
           collectAndNormalize,
+        })
+      );
+
+      server.middlewares.use(
+        "/api/payments",
+        paymentsRoutes({
+          respondJson,
+          getSessionIdFromRequest: (r) =>
+            getSessionIdFromRequest(r, sessionSecret),
+          getSession,
         })
       );
     },
