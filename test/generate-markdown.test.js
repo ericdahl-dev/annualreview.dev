@@ -147,10 +147,42 @@ describe("generateMarkdown", () => {
 
   it("includes performance dimensions in the Self-Evaluation section", () => {
     const md = generateMarkdown(sampleData);
-    expect(md).toContain("Performance dimensions");
+    expect(md).toContain("Performance Dimensions");
     expect(md).toContain("Work Quality and Expertise");
     expect(md).toContain("Consistently delivered high-quality, well-tested changes.");
   });
+
+  it("includes performance dimension evidence in the Evidence Appendix", () => {
+    const data = {
+      ...sampleData,
+      self_eval: {
+        ...sampleData.self_eval,
+        sections: {
+          ...sampleData.self_eval.sections,
+          performance_dimensions: [
+            {
+              id: "initiative",
+              name: "Initiative",
+              text: "Proactively improved API reliability.",
+              evidence: [
+                {
+                  id: "org/repo#777",
+                  url: "https://github.com/org/repo/pull/777",
+                  title: "Improve API retries",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    const md = generateMarkdown(data);
+    const appendixSection = md.split("## Evidence Appendix")[1] ?? "";
+    expect(appendixSection).toContain("org/repo#777");
+    expect(appendixSection).toContain("Improve API retries");
+    expect(appendixSection).toContain("https://github.com/org/repo/pull/777");
+  });
+
 
   it("includes Evidence Appendix table", () => {
     const md = generateMarkdown(sampleData);

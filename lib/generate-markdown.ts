@@ -223,7 +223,7 @@ export function generateMarkdown(
     }
 
     if (sections.performance_dimensions?.length) {
-      lines.push("### Performance dimensions", "");
+      lines.push("### Performance Dimensions", "");
       sections.performance_dimensions.forEach((dim) => {
         const heading = dim.name || dim.id;
         if (heading) {
