@@ -137,14 +137,20 @@ export default function Generate() {
       .catch(() => {});
   }, [user]);
 
-  const handleGenerate = async (stripeSessionId?: string) => {
+  const handleGenerate = async (
+    stripeSessionId?: string,
+    evidenceOverride?: string,
+    goalsOverride?: string
+  ) => {
+    const textToUse = evidenceOverride ?? evidenceText;
+    const goalsToUse = goalsOverride ?? goals;
     let evidence: Record<string, unknown>;
     try {
-      evidence = JSON.parse(evidenceText) as Record<string, unknown>;
+      evidence = JSON.parse(textToUse) as Record<string, unknown>;
     } catch {
       const looksTruncated =
-        /[\{\[,]\s*$/.test(evidenceText.trim()) ||
-        !evidenceText.includes('"contributions"');
+        /[\{\[,]\s*$/.test(textToUse.trim()) ||
+        !textToUse.includes('"contributions"');
       setError(
         looksTruncated
           ? 'Invalid JSON—looks truncated (e.g. missing contributions or closing brackets). Try "Upload evidence.json" instead of pasting, or paste the full file again.'
@@ -164,10 +170,10 @@ export default function Generate() {
       return;
     }
     if (
-      (goals as string).trim() &&
+      (goalsToUse as string).trim() &&
       !(evidence as { goals?: string }).goals
     ) {
-      evidence = { ...evidence, goals: (goals as string).trim() };
+      evidence = { ...evidence, goals: (goalsToUse as string).trim() };
     }
     if (stripeSessionId) {
       evidence = { ...evidence, _stripe_session_id: stripeSessionId };
@@ -275,8 +281,11 @@ export default function Generate() {
       setGoals(savedGoals);
     }
     if (savedEvidence) {
-      // Short timeout to let state settle before generating
-      const timer = setTimeout(() => handleGenerate(savedSessionId!), STRIPE_RETURN_DELAY_MS);
+      // Use saved evidence/goals directly; state updates are async and may not be visible yet
+      const timer = setTimeout(
+        () => handleGenerate(savedSessionId!, savedEvidence!, savedGoals ?? undefined),
+        STRIPE_RETURN_DELAY_MS
+      );
       return () => clearTimeout(timer);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
