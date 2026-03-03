@@ -77,6 +77,7 @@ In your GitHub OAuth App settings, set the **Authorization callback URL** to `ht
 
 | Variable | Description |
 |----------|-------------|
+| `DATABASE_URL` | Neon (or any Postgres) connection string. Required for premium credits and Stripe payments; tables `credits` and `credit_events` are created automatically. |
 | `LLM_MODEL` | Override the default model (e.g. `google/gemini-2.0-flash`) |
 | `VITE_POSTHOG_API_KEY` / `POSTHOG_API_KEY` | Enables client-side PostHog analytics (pageviews, autocapture) and server-side LLM tracing |
 | `VITE_POSTHOG_HOST` / `POSTHOG_HOST` | PostHog host (default `https://us.i.posthog.com`; use `https://eu.i.posthog.com` for EU) |
@@ -89,6 +90,8 @@ yarn dev      # start Vite dev server
 yarn test     # run Vitest tests
 yarn typecheck
 ```
+
+Payment- and premium-related tests (`test/payments.test.js`, `test/generate-premium.test.js`) require `DATABASE_URL` to be set (e.g. a Neon branch or test database).
 
 ## Evidence grounding contract
 

@@ -53,16 +53,26 @@ function apiRoutesPlugin() {
     configureServer(server: ViteDevServer, config?: ConfigEnv) {
       const mode = config?.mode ?? "development";
       const env = loadEnv(mode, process.cwd(), "");
-      if (env.POSTHOG_API_KEY !== undefined)
-        process.env.POSTHOG_API_KEY = env.POSTHOG_API_KEY;
-      if (env.POSTHOG_HOST !== undefined)
-        process.env.POSTHOG_HOST = env.POSTHOG_HOST;
-      if (env.STRIPE_SECRET_KEY !== undefined)
-        process.env.STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
-      if (env.STRIPE_WEBHOOK_SECRET !== undefined)
-        process.env.STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
-      if (env.CREDITS_PER_PURCHASE !== undefined)
-        process.env.CREDITS_PER_PURCHASE = env.CREDITS_PER_PURCHASE;
+      const copyIfSet = (key: string) => {
+        if (env[key] !== undefined) process.env[key] = env[key];
+      };
+      [
+        "POSTHOG_API_KEY",
+        "POSTHOG_HOST",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "STRIPE_PRICE_CENTS",
+        "STRIPE_CURRENCY",
+        "CREDITS_PER_PURCHASE",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "LLM_MODEL",
+        "PREMIUM_LLM_MODEL",
+      ].forEach(copyIfSet);
       const sessionSecret =
         env.SESSION_SECRET || process.env.SESSION_SECRET || "dev-secret";
       const clientId = env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID;

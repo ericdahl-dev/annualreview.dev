@@ -121,7 +121,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         respondJson(res, 401, { error: "Login required" });
         return;
       }
-      respondJson(res, 200, { credits: getCredits(userSession.login) });
+      respondJson(res, 200, { credits: await getCredits(userSession.login) });
       return;
     }
     if (path === "checkout" && req.method === "POST") {
@@ -217,7 +217,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           // always be 'paid' here, but the check is kept for defense-in-depth.
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
-            awardCredits(userLogin, session.id);
+            await awardCredits(userLogin, session.id);
             console.error("[payments] credits awarded:", userLogin, session.id);
           } else {
             console.error("[payments] checkout.session.completed skipped:", {
