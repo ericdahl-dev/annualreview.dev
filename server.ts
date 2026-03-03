@@ -2,7 +2,7 @@
  * Production server: serves dist/ and the same API routes as the Vite dev server.
  * For Coolify (or any Node host): run `yarn build && yarn start` (or `node --import tsx/esm server.ts`).
  * Set PORT (default 3000), SESSION_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and OPENROUTER_API_KEY.
- * Optional: LLM_MODEL, PREMIUM_LLM_MODEL (defaults: Claude 3 Haiku free, Claude 3.5 Sonnet premium).
+ * Optional: LLM_MODEL, PREMIUM_LLM_MODEL (defaults: Claude 3 Haiku free, Claude Haiku 4.5 premium). MAX_USER_TOKENS_FREE, MAX_USER_TOKENS_PREMIUM (context caps per tier; defaults 500k free, 184k premium).
  * Optional: POSTHOG_API_KEY (and POSTHOG_HOST) for LLM analytics and Node logs in PostHog.
  *
  * --- Premium credits (Postgres) ---

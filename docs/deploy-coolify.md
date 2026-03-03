@@ -13,6 +13,7 @@ The repo includes `nixpacks.toml` so Nixpacks runs `yarn build` and then `yarn s
    - `GITHUB_CLIENT_SECRET` — from the same OAuth App
    - `OPENROUTER_API_KEY` — **required** for the generate pipeline. Uses OpenRouter with Claude (free: Haiku, premium: Sonnet).
    - `LLM_MODEL`, `PREMIUM_LLM_MODEL` — (optional) override free/premium models.
+   - `MAX_USER_TOKENS_FREE`, `MAX_USER_TOKENS_PREMIUM` — (optional) context caps per tier; defaults 500k free, 184k premium.
    - `POSTHOG_API_KEY` — (optional) same project token as frontend; enables LLM analytics (Traces/Generations) and Node OTLP logs in PostHog. If missing, pipeline runs but no LLM events or logs are sent.
    - `POSTHOG_HOST` — (optional) default `https://us.i.posthog.com`; use `https://eu.i.posthog.com` for EU.
 

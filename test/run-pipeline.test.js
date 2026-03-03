@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { extractJson, runPipeline, clearPipelineCache } from "../lib/run-pipeline.js";
+import { extractJson, runPipeline, clearPipelineCache, getMaxUserTokensForTier } from "../lib/run-pipeline.js";
 
 const mockThemes = { themes: [{ theme_id: "t1", theme_name: "Reliability" }] };
 const mockBullets = { bullets_by_theme: [], top_10_bullets_overall: [] };
@@ -32,6 +32,64 @@ vi.mock("posthog-node", () => ({
     this.shutdown = () => Promise.resolve();
   },
 }));
+
+describe("getMaxUserTokensForTier", () => {
+  it("returns default premium cap when premium is true", () => {
+    const previousPremium = process.env.MAX_USER_TOKENS_PREMIUM;
+    try {
+      delete process.env.MAX_USER_TOKENS_PREMIUM;
+      expect(getMaxUserTokensForTier(true)).toBe(184_000);
+    } finally {
+      if (previousPremium === undefined) {
+        delete process.env.MAX_USER_TOKENS_PREMIUM;
+      } else {
+        process.env.MAX_USER_TOKENS_PREMIUM = previousPremium;
+      }
+    }
+  });
+
+  it("returns default free cap when premium is false", () => {
+    const previousFree = process.env.MAX_USER_TOKENS_FREE;
+    try {
+      delete process.env.MAX_USER_TOKENS_FREE;
+      expect(getMaxUserTokensForTier(false)).toBe(500_000);
+    } finally {
+      if (previousFree === undefined) {
+        delete process.env.MAX_USER_TOKENS_FREE;
+      } else {
+        process.env.MAX_USER_TOKENS_FREE = previousFree;
+      }
+    }
+  });
+
+  it("uses MAX_USER_TOKENS_PREMIUM when set", () => {
+    const previousPremium = process.env.MAX_USER_TOKENS_PREMIUM;
+    try {
+      process.env.MAX_USER_TOKENS_PREMIUM = "100000";
+      expect(getMaxUserTokensForTier(true)).toBe(100_000);
+    } finally {
+      if (previousPremium === undefined) {
+        delete process.env.MAX_USER_TOKENS_PREMIUM;
+      } else {
+        process.env.MAX_USER_TOKENS_PREMIUM = previousPremium;
+      }
+    }
+  });
+
+  it("uses MAX_USER_TOKENS_FREE when set", () => {
+    const previousFree = process.env.MAX_USER_TOKENS_FREE;
+    try {
+      process.env.MAX_USER_TOKENS_FREE = "200000";
+      expect(getMaxUserTokensForTier(false)).toBe(200_000);
+    } finally {
+      if (previousFree === undefined) {
+        delete process.env.MAX_USER_TOKENS_FREE;
+      } else {
+        process.env.MAX_USER_TOKENS_FREE = previousFree;
+      }
+    }
+  });
+});
 
 describe("extractJson", () => {
   it("extracts a single JSON object", () => {

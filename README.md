@@ -68,7 +68,7 @@ The repo ships with `nixpacks.toml` for one-click Coolify deploys. See [docs/dep
 | `SESSION_SECRET` | Random string for signing session cookies (e.g. `openssl rand -hex 32`) |
 | `GITHUB_CLIENT_ID` | From your [GitHub OAuth App](https://github.com/settings/developers) |
 | `GITHUB_CLIENT_SECRET` | From the same OAuth App |
-| `OPENROUTER_API_KEY` | **Recommended** LLM provider — defaults to `anthropic/claude-3.5-sonnet`. Takes priority over `OPENAI_API_KEY`. |
+| `OPENROUTER_API_KEY` | **Recommended** LLM provider — premium defaults to `anthropic/claude-haiku-4.5`. Takes priority over `OPENAI_API_KEY`. |
 | `OPENAI_API_KEY` | Alternative to OpenRouter — defaults to `gpt-4o-mini`. |
 
 In your GitHub OAuth App settings, set the **Authorization callback URL** to `https://<your-domain>/api/auth/callback/github`. See [docs/oauth-scopes.md](docs/oauth-scopes.md).
