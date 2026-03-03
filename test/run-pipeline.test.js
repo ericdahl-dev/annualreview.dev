@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { extractJson, runPipeline, clearPipelineCache } from "../lib/run-pipeline.js";
+import { extractJson, runPipeline, clearPipelineCache, getMaxUserTokensForModel } from "../lib/run-pipeline.js";
 
 const mockThemes = { themes: [{ theme_id: "t1", theme_name: "Reliability" }] };
 const mockBullets = { bullets_by_theme: [], top_10_bullets_overall: [] };
@@ -32,6 +32,36 @@ vi.mock("posthog-node", () => ({
     this.shutdown = () => Promise.resolve();
   },
 }));
+
+describe("getMaxUserTokensForModel", () => {
+  it("returns default premium cap when premium is true", () => {
+    delete process.env.MAX_USER_TOKENS_PREMIUM;
+    expect(getMaxUserTokensForModel(true)).toBe(184_000);
+  });
+
+  it("returns default free cap when premium is false", () => {
+    delete process.env.MAX_USER_TOKENS_FREE;
+    expect(getMaxUserTokensForModel(false)).toBe(500_000);
+  });
+
+  it("uses MAX_USER_TOKENS_PREMIUM when set", () => {
+    process.env.MAX_USER_TOKENS_PREMIUM = "100000";
+    try {
+      expect(getMaxUserTokensForModel(true)).toBe(100_000);
+    } finally {
+      delete process.env.MAX_USER_TOKENS_PREMIUM;
+    }
+  });
+
+  it("uses MAX_USER_TOKENS_FREE when set", () => {
+    process.env.MAX_USER_TOKENS_FREE = "200000";
+    try {
+      expect(getMaxUserTokensForModel(false)).toBe(200_000);
+    } finally {
+      delete process.env.MAX_USER_TOKENS_FREE;
+    }
+  });
+});
 
 describe("extractJson", () => {
   it("extracts a single JSON object", () => {

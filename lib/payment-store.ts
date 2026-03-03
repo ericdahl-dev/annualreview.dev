@@ -16,7 +16,7 @@ import type { Pool } from "pg";
 
 /** Read at runtime so Vite dev (which copies .env after modules load) sees the correct value. */
 export function getCreditsPerPurchase(): number {
-  return Number(process.env.CREDITS_PER_PURCHASE) || 1;
+  return Number(process.env.CREDITS_PER_PURCHASE) || 5;
 }
 
 let pool: Pool | null = null;

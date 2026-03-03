@@ -189,12 +189,23 @@ export interface PipelineOptions {
   posthogDistinctId?: string;
 }
 
-/** Default model ids for free and premium (OpenRouter + Claude). */
+/** Default model ids for free and premium (OpenRouter). */
 export function getDefaultModels(): { free: string; premium: string } {
   return {
     free: process.env.LLM_MODEL ?? "anthropic/claude-3-haiku",
     premium: process.env.PREMIUM_LLM_MODEL ?? "anthropic/claude-3.5-sonnet",
   };
+}
+
+/** Max user-message tokens by tier (leaves room for system + response). Env override: MAX_USER_TOKENS_FREE, MAX_USER_TOKENS_PREMIUM. */
+export function getMaxUserTokensForModel(premium: boolean): number {
+  const envKey = premium ? "MAX_USER_TOKENS_PREMIUM" : "MAX_USER_TOKENS_FREE";
+  const val = process.env[envKey];
+  if (val != null && val !== "") {
+    const n = Number(val);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return premium ? 184_000 : 500_000;
 }
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
@@ -272,7 +283,8 @@ export async function runPipeline(
     }
   }
 
-  evidence = fitEvidenceToBudget(evidence, (ev) => STEPS[0].buildInput(ev, {}));
+  const maxUserTokens = getMaxUserTokensForModel(premium);
+  evidence = fitEvidenceToBudget(evidence, (ev) => STEPS[0].buildInput(ev, {}), maxUserTokens);
 
   const previousResults: Record<string, unknown> = {};
   let prevStepMs: number | undefined;
