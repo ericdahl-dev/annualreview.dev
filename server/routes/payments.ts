@@ -165,6 +165,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
 
         const session = await stripe.checkout.sessions.create({
           mode: "payment",
+          payment_method_types: ["card"],
           metadata: { user_login: userLogin },
           line_items: [
             {
@@ -210,6 +211,10 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         console.error("[payments] webhook event:", event.type, event.id);
         if (event.type === "checkout.session.completed") {
           const session = event.data.object as Stripe.Checkout.Session;
+          // Award credits to the GitHub user who initiated the checkout.
+          // user_login is stored in metadata when creating the checkout session.
+          // payment_method_types is restricted to 'card' so payment_status will
+          // always be 'paid' here, but the check is kept for defense-in-depth.
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             awardCredits(userLogin, session.id);
