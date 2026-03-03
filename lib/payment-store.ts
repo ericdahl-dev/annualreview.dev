@@ -22,7 +22,7 @@
 import Database from "better-sqlite3";
 import { join } from "path";
 
-export const CREDITS_PER_PURCHASE = Number(process.env.CREDITS_PER_PURCHASE) || 5;
+export const CREDITS_PER_PURCHASE = Number(process.env.CREDITS_PER_PURCHASE) || 1;
 
 const DB_PATH =
   process.env.CREDITS_DB_PATH ??

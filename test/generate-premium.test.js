@@ -111,7 +111,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("runs premium pipeline and deducts one credit when user has credits", async () => {
-    awardCredits("alice", "cs_prev_purchase"); // award 5 credits to alice
+    awardCredits("alice", "cs_prev_purchase"); // award 1 credit to alice
     const opts = makeOptionsLoggedIn("alice", {
       readJsonBody: vi.fn().mockResolvedValue({
         ...validEvidence,
@@ -128,9 +128,9 @@ describe("generateRoutes – premium flag", () => {
       expect.objectContaining({ premium: true })
     );
     expect(res.body).toMatchObject({ job_id: "job-1", premium: true });
-    // 5 awarded, 1 deducted → 4 remaining
-    expect(res.body.credits_remaining).toBe(4);
-    expect(getCredits("alice")).toBe(4);
+    // 1 awarded, 1 deducted → 0 remaining
+    expect(res.body.credits_remaining).toBe(0);
+    expect(getCredits("alice")).toBe(0);
   });
 
   it("runs premium pipeline via _premium flag (no session ID needed for repeat use)", async () => {
@@ -143,7 +143,7 @@ describe("generateRoutes – premium flag", () => {
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
-    expect(res.body.credits_remaining).toBe(4);
+    expect(res.body.credits_remaining).toBe(0);
   });
 
   it("verifies Stripe inline (webhook not yet fired) and awards credits to correct user", async () => {
@@ -167,8 +167,8 @@ describe("generateRoutes – premium flag", () => {
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
-    // 5 awarded, 1 deducted → 4 remaining
-    expect(res.body.credits_remaining).toBe(4);
+    // 1 awarded, 1 deducted → 0 remaining
+    expect(res.body.credits_remaining).toBe(0);
   });
 
   it("rejects inline Stripe verify when metadata user_login does not match logged-in user", async () => {
@@ -197,8 +197,8 @@ describe("generateRoutes – premium flag", () => {
 
   it("returns 402 when all credits are exhausted", async () => {
     awardCredits("fiona", "cs_fiona");
-    // Use all 5 credits
-    for (let i = 0; i < 5; i++) {
+    // Use all 1 credit
+    for (let i = 0; i < 1; i++) {
       const res = mockRes();
       await generateRoutes(makeOptionsLoggedIn("fiona", {
         readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
