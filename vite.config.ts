@@ -180,7 +180,9 @@ function apiRoutesPlugin() {
   };
 }
 
+
 export default defineConfig({
   plugins: [react(), apiRoutesPlugin()],
   envPrefix: ["VITE_", "POSTHOG"],
+
 });

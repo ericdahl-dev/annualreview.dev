@@ -193,7 +193,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     }
 
     if (path === "webhook" && req.method === "POST") {
-      console.error("[payments] webhook received");
+      console.log("[payments] webhook received");
       const stripe = getStripe();
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       if (!stripe || !webhookSecret) {
@@ -208,7 +208,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           return;
         }
         const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-        console.error("[payments] webhook event:", event.type, event.id);
+        console.log("[payments] webhook event:", event.type);
         if (event.type === "checkout.session.completed") {
           const session = event.data.object as Stripe.Checkout.Session;
           // Award credits to the GitHub user who initiated the checkout.
@@ -218,12 +218,9 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             await awardCredits(userLogin, session.id);
-            console.error("[payments] credits awarded:", userLogin, session.id);
+            console.log("[payments] credits awarded");
           } else {
-            console.error("[payments] checkout.session.completed skipped:", {
-              payment_status: session.payment_status,
-              user_login: userLogin ?? null,
-            });
+            console.log("[payments] checkout.session.completed skipped: payment_status =", session.payment_status);
           }
         }
         respondJson(res, 200, { received: true });
