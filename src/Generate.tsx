@@ -46,7 +46,7 @@ export default function Generate() {
   const [isPremiumResult, setIsPremiumResult] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
-  const [creditsPerPurchase, setCreditsPerPurchase] = useState(1);
+  const [creditsPerPurchase, setCreditsPerPurchase] = useState(5);
   const [priceCents, setPriceCents] = useState(100);
   const [freeModel, setFreeModel] = useState<string>("");
   const [premiumModel, setPremiumModel] = useState<string>("");

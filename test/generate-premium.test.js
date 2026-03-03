@@ -111,7 +111,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("runs premium pipeline and deducts one credit when user has credits", async () => {
-    awardCredits("alice", "cs_prev_purchase", 5); // 5 credits so 4 remain after deduct
+    awardCredits("alice", "cs_prev_purchase"); // default 5 credits, 4 remain after deduct
     const opts = makeOptionsLoggedIn("alice", {
       readJsonBody: vi.fn().mockResolvedValue({
         ...validEvidence,
@@ -134,7 +134,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("runs premium pipeline via _premium flag (no session ID needed for repeat use)", async () => {
-    awardCredits("bob", "cs_bob_purchase", 5);
+    awardCredits("bob", "cs_bob_purchase");
     const opts = makeOptionsLoggedIn("bob", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
     });
@@ -167,8 +167,8 @@ describe("generateRoutes – premium flag", () => {
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
-    // CREDITS_PER_PURCHASE (1) awarded, 1 deducted → 0 remaining
-    expect(res.body.credits_remaining).toBe(0);
+    // CREDITS_PER_PURCHASE (5) awarded, 1 deducted → 4 remaining
+    expect(res.body.credits_remaining).toBe(4);
   });
 
   it("rejects inline Stripe verify when metadata user_login does not match logged-in user", async () => {
@@ -196,7 +196,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("returns 402 when all credits are exhausted", async () => {
-    awardCredits("fiona", "cs_fiona", 5);
+    awardCredits("fiona", "cs_fiona");
     // Use all 5 credits
     for (let i = 0; i < 5; i++) {
       const res = mockRes();
@@ -215,7 +215,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("strips _stripe_session_id and _premium from evidence before pipeline", async () => {
-    awardCredits("grace", "cs_grace", 5);
+    awardCredits("grace", "cs_grace");
     let capturedEvidence = null;
     const opts = makeOptionsLoggedIn("grace", {
       readJsonBody: vi.fn().mockResolvedValue({

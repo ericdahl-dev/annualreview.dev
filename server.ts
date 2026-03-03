@@ -6,7 +6,7 @@
  * Optional: POSTHOG_API_KEY (and POSTHOG_HOST) for LLM analytics and Node logs in PostHog.
  *
  * --- Premium credits (SQLite) ---
- * Optional: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_CENTS (default 100), STRIPE_CURRENCY (default "usd"), CREDITS_PER_PURCHASE (default 1).
+ * Optional: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_CENTS (default 100), STRIPE_CURRENCY (default "usd"), CREDITS_PER_PURCHASE (default 5).
  * Optional: CREDITS_DB_PATH – absolute path for the SQLite credits database (default: <cwd>/credits.db).
  *
  * Coolify / Docker deployment note:

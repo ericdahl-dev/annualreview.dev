@@ -23,7 +23,7 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 
 - `STRIPE_PRICE_CENTS` – default `100` ($1.00).
 - `STRIPE_CURRENCY` – default `usd`.
-- `CREDITS_PER_PURCHASE` – credits per successful payment (default 1; see `server.ts`).
+- `CREDITS_PER_PURCHASE` – credits per successful payment (default 5; see `server.ts`).
 
 ## Quick links (from Stripe MCP – your account)
 

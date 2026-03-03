@@ -155,14 +155,14 @@ describe("Generate", () => {
   it("premium button shown when payments are enabled", async () => {
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
-      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: true, credits_per_purchase: 1, price_cents: 100 }));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: true, credits_per_purchase: 5, price_cents: 100 }));
       return Promise.reject(new Error("Unmocked: " + url));
     });
     render(<Generate />);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /premium/i })).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: /1 run/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /5 runs/i })).toBeInTheDocument();
   });
 });
 
