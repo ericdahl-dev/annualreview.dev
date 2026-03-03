@@ -76,7 +76,12 @@ OUTPUT (valid JSON only):
 
 RULES:
 - If goals are provided, reference them in the summary and key_accomplishments to show alignment between work done and intended goals.
-- Keep each section concise and form-friendly.
+- Keep each section **very concise and form-friendly**:
+  - `summary.text`: max **4 sentences**.
+  - `how_i_worked.text`: max **4 sentences**. Focus on *how* work was done (habits, approaches, collaboration), not re-listing accomplishments.
+  - `growth.text`: max **4 sentences**. Emphasize skills/behaviors that changed, not repeating the same examples from other sections.
+  - Each `performance_dimensions[*].text`: **1–3 sentences** as a single tight paragraph.
+- Avoid repetition across sections: do **not** restate the same example in more than **2** places (e.g., if an initiative is already in summary + one dimension, do not repeat it again).
 - Evidence should back claims; if evidence doesn’t exist, ask a question instead.
 - Next year goals can be inferred from themes, but MUST ask for confirmation.
 - For each performance dimension, prefer 1–3 sentences grounded in the provided contributions/themes/bullets/stories.
