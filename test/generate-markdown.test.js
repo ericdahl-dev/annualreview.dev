@@ -73,6 +73,14 @@ const sampleData = {
       next_year_goals: [
         { text: "Lead a major infrastructure project.", evidence: [], needs_user_input: ["confirm scope"] },
       ],
+      performance_dimensions: [
+        {
+          id: "work_quality",
+          name: "Work Quality and Expertise",
+          text: "Consistently delivered high-quality, well-tested changes.",
+          evidence: [{ id: "org/repo#10", url: "https://github.com/org/repo/pull/10" }],
+        },
+      ],
     },
     missing_info_questions: [],
   },
@@ -136,6 +144,45 @@ describe("generateMarkdown", () => {
     expect(md).toContain("Growth");
     expect(md).toContain("Next Year Goals");
   });
+
+  it("includes performance dimensions in the Self-Evaluation section", () => {
+    const md = generateMarkdown(sampleData);
+    expect(md).toContain("Performance Dimensions");
+    expect(md).toContain("Work Quality and Expertise");
+    expect(md).toContain("Consistently delivered high-quality, well-tested changes.");
+  });
+
+  it("includes performance dimension evidence in the Evidence Appendix", () => {
+    const data = {
+      ...sampleData,
+      self_eval: {
+        ...sampleData.self_eval,
+        sections: {
+          ...sampleData.self_eval.sections,
+          performance_dimensions: [
+            {
+              id: "initiative",
+              name: "Initiative",
+              text: "Proactively improved API reliability.",
+              evidence: [
+                {
+                  id: "org/repo#777",
+                  url: "https://github.com/org/repo/pull/777",
+                  title: "Improve API retries",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    const md = generateMarkdown(data);
+    const appendixSection = md.split("## Evidence Appendix")[1] ?? "";
+    expect(appendixSection).toContain("org/repo#777");
+    expect(appendixSection).toContain("Improve API retries");
+    expect(appendixSection).toContain("https://github.com/org/repo/pull/777");
+  });
+
 
   it("includes Evidence Appendix table", () => {
     const md = generateMarkdown(sampleData);
