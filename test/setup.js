@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config();
+dotenv.config({ path: ".env.test", override: true });
 
 // Payment/premium tests assume 1 credit per purchase; override .env so they pass regardless of local config.
 if (process.env.DATABASE_URL) {
