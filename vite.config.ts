@@ -180,18 +180,9 @@ function apiRoutesPlugin() {
   };
 }
 
-const allowedHostsEnv = process.env.VITE_ALLOWED_HOSTS;
-const allowedHosts = allowedHostsEnv
-  ? allowedHostsEnv
-      .split(",")
-      .map((host) => host.trim())
-      .filter((host) => host.length > 0)
-  : [];
 
 export default defineConfig({
   plugins: [react(), apiRoutesPlugin()],
   envPrefix: ["VITE_", "POSTHOG"],
-  server: {
-    allowedHosts,
-  },
+
 });
