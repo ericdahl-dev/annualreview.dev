@@ -46,12 +46,20 @@ interface SelfEvalSection {
   evidence?: EvidenceRef[];
 }
 
+interface PerformanceDimension {
+  id?: string;
+  name?: string;
+  text?: string;
+  evidence?: EvidenceRef[];
+}
+
 interface SelfEvalSections {
   summary?: SelfEvalSection;
   key_accomplishments?: (Bullet & { evidence?: EvidenceRef[] })[];
   how_i_worked?: SelfEvalSection;
   growth?: SelfEvalSection;
   next_year_goals?: Bullet[];
+  performance_dimensions?: PerformanceDimension[];
 }
 
 interface ThemesOutput {
@@ -178,8 +186,13 @@ export function generateMarkdown(
 
   // ── Self-Evaluation ─────────────────────────────────────────────────────────
   const sections = self_eval?.sections ?? {};
-  const hasAnySection = sections.summary || sections.key_accomplishments?.length ||
-    sections.how_i_worked || sections.growth || sections.next_year_goals?.length;
+  const hasAnySection =
+    sections.summary ||
+    sections.key_accomplishments?.length ||
+    sections.how_i_worked ||
+    sections.growth ||
+    sections.next_year_goals?.length ||
+    sections.performance_dimensions?.length;
 
   if (hasAnySection) {
     lines.push("---", "", "## Self-Evaluation", "");
@@ -207,6 +220,23 @@ export function generateMarkdown(
         lines.push("", `*Sources: ${evidenceLinks(sections.growth.evidence)}*`);
       }
       lines.push("");
+    }
+
+    if (sections.performance_dimensions?.length) {
+      lines.push("### Performance dimensions", "");
+      sections.performance_dimensions.forEach((dim) => {
+        const heading = dim.name || dim.id;
+        if (heading) {
+          lines.push(`#### ${heading}`, "");
+        }
+        if (dim.text) {
+          lines.push(dim.text);
+        }
+        if (dim.evidence?.length) {
+          lines.push("", `*Sources: ${evidenceLinks(dim.evidence)}*`);
+        }
+        lines.push("");
+      });
     }
 
     if (sections.next_year_goals?.length) {
@@ -243,6 +273,9 @@ export function generateMarkdown(
   if (sections.how_i_worked) addEvidence(sections.how_i_worked.evidence);
   if (sections.growth) addEvidence(sections.growth.evidence);
   if (sections.next_year_goals) sections.next_year_goals.forEach((i) => addEvidence(i.evidence));
+  if (sections.performance_dimensions) {
+    sections.performance_dimensions.forEach((d) => addEvidence(d.evidence));
+  }
 
   if (allEvidence.length) {
     lines.push("---", "", "## Evidence Appendix", "");

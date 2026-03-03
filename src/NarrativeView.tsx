@@ -62,12 +62,20 @@ interface SelfEvalSection {
   evidence?: EvidenceRef[];
 }
 
+interface PerformanceDimension {
+  id?: string;
+  name?: string;
+  text?: string;
+  evidence?: EvidenceRef[];
+}
+
 interface SelfEvalSections {
   summary?: SelfEvalSection;
   key_accomplishments?: (Bullet & { evidence?: EvidenceRef[] })[];
   how_i_worked?: SelfEvalSection;
   growth?: SelfEvalSection;
   next_year_goals?: (Bullet & { evidence?: EvidenceRef[] })[];
+  performance_dimensions?: PerformanceDimension[];
 }
 
 interface SelfEvalPayload {
@@ -392,7 +400,8 @@ function SelfEvalNarrative({
     (sections.key_accomplishments?.length ?? 0) > 0 ||
     sections.how_i_worked?.text ||
     sections.growth?.text ||
-    (sections.next_year_goals?.length ?? 0) > 0;
+    (sections.next_year_goals?.length ?? 0) > 0 ||
+    (sections.performance_dimensions?.length ?? 0) > 0;
   if (!hasAny) {
     return <p className="narrative-empty">No self-eval sections yet.</p>;
   }
@@ -431,6 +440,20 @@ function SelfEvalNarrative({
           <p className="narrative-selfeval-heading">Growth</p>
           <p className="narrative-selfeval-text">{sections.growth.text}</p>
           <EvidenceTags evidence={sections.growth.evidence} />
+        </div>
+      )}
+      {(sections.performance_dimensions?.length ?? 0) > 0 && (
+        <div className="narrative-selfeval-section">
+          <p className="narrative-selfeval-heading">Performance dimensions</p>
+          <ul className="narrative-selfeval-list">
+            {(sections.performance_dimensions ?? []).map((dim, i) => (
+              <li key={dim.id ?? i} className="narrative-bullet">
+                <strong>{dim.name ?? dim.id}</strong>
+                {dim.text && <> — {dim.text}</>}
+                <EvidenceTags evidence={dim.evidence} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {(sections.next_year_goals?.length ?? 0) > 0 && (

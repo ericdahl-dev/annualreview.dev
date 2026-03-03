@@ -73,6 +73,14 @@ const sampleData = {
       next_year_goals: [
         { text: "Lead a major infrastructure project.", evidence: [], needs_user_input: ["confirm scope"] },
       ],
+      performance_dimensions: [
+        {
+          id: "work_quality",
+          name: "Work Quality and Expertise",
+          text: "Consistently delivered high-quality, well-tested changes.",
+          evidence: [{ id: "org/repo#10", url: "https://github.com/org/repo/pull/10" }],
+        },
+      ],
     },
     missing_info_questions: [],
   },
@@ -135,6 +143,13 @@ describe("generateMarkdown", () => {
     expect(md).toContain("How I Worked");
     expect(md).toContain("Growth");
     expect(md).toContain("Next Year Goals");
+  });
+
+  it("includes performance dimensions in the Self-Evaluation section", () => {
+    const md = generateMarkdown(sampleData);
+    expect(md).toContain("Performance dimensions");
+    expect(md).toContain("Work Quality and Expertise");
+    expect(md).toContain("Consistently delivered high-quality, well-tested changes.");
   });
 
   it("includes Evidence Appendix table", () => {
