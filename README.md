@@ -4,6 +4,12 @@ Turn your GitHub activity into an evidence-backed annual review in minutes. **ht
 
 Sign in with GitHub (or use a token), pick your date range, and get themes, impact bullets, STAR stories, and self-eval sections — every claim linked to a real PR.
 
+## Screenshots
+
+![Landing page – hero section](https://github.com/user-attachments/assets/20d9610f-3df2-4716-a2e5-849e3ba7608b)
+
+![Generate page – connect GitHub and paste evidence](https://github.com/user-attachments/assets/c577ae0b-0e5e-4fa9-955e-e47ce21a12a8)
+
 ## What you get
 
 | Output | Description |
