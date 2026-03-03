@@ -22,7 +22,10 @@
 import Database from "better-sqlite3";
 import { join } from "path";
 
-export const CREDITS_PER_PURCHASE = Number(process.env.CREDITS_PER_PURCHASE) || 1;
+/** Read lazily so .env changes via Vite configureServer() are respected. */
+export function getCreditsPerPurchase(): number {
+  return Number(process.env.CREDITS_PER_PURCHASE) || 1;
+}
 
 const DB_PATH =
   process.env.CREDITS_DB_PATH ??
@@ -63,7 +66,7 @@ const stmtInsertEvent = () =>
   );
 
 /**
- * Award CREDITS_PER_PURCHASE credits to a user.
+ * Award credits to a user (defaults to getCreditsPerPurchase()).
  *
  * @param userLogin        GitHub login of the user receiving credits.
  * @param stripeSessionId  Stripe Checkout Session ID used as an idempotency key.
@@ -72,7 +75,7 @@ const stmtInsertEvent = () =>
 export function awardCredits(
   userLogin: string,
   stripeSessionId: string,
-  count = CREDITS_PER_PURCHASE
+  count = getCreditsPerPurchase()
 ): void {
   const awardedAt = new Date().toISOString();
   const result = stmtInsertEvent().run(stripeSessionId, userLogin, awardedAt);

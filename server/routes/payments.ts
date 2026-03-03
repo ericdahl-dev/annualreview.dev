@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
 import { PostHog } from "posthog-node";
 import Stripe from "stripe";
-import { awardCredits, getCredits, CREDITS_PER_PURCHASE } from "../../lib/payment-store.js";
+import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/run-pipeline.js";
 
 const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
@@ -106,7 +106,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
       respondJson(res, 200, {
         enabled,
         price_cents: Number(process.env.STRIPE_PRICE_CENTS) || 100,
-        credits_per_purchase: CREDITS_PER_PURCHASE,
+        credits_per_purchase: getCreditsPerPurchase(),
         free_model: freeModel,
         premium_model: premiumModel,
       });
@@ -175,7 +175,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
                 unit_amount: priceCents,
                 product_data: {
                   name: "Premium Annual Review Report",
-                  description: `${CREDITS_PER_PURCHASE} higher-quality AI report runs using a state-of-the-art model`,
+                  description: `${getCreditsPerPurchase()} higher-quality AI report runs using a state-of-the-art model`,
                 },
               },
             },
@@ -193,7 +193,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     }
 
     if (path === "webhook" && req.method === "POST") {
-      console.error("[payments] webhook received");
+      console.log("[payments] webhook received");
       const stripe = getStripe();
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       if (!stripe || !webhookSecret) {
@@ -208,7 +208,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           return;
         }
         const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-        console.error("[payments] webhook event:", event.type, event.id);
+        console.log("[payments] webhook event:", event.type);
         if (event.type === "checkout.session.completed") {
           const session = event.data.object as Stripe.Checkout.Session;
           // Award credits to the GitHub user who initiated the checkout.
@@ -218,12 +218,9 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             awardCredits(userLogin, session.id);
-            console.error("[payments] credits awarded:", userLogin, session.id);
+            console.log("[payments] credits awarded");
           } else {
-            console.error("[payments] checkout.session.completed skipped:", {
-              payment_status: session.payment_status,
-              user_login: userLogin ?? null,
-            });
+            console.log("[payments] checkout.session.completed skipped: payment_status =", session.payment_status);
           }
         }
         respondJson(res, 200, { received: true });
