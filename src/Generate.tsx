@@ -18,6 +18,17 @@ const GITHUB_TOKEN_URL =
   "https://github.com/settings/tokens/new?scopes=repo&description=AnnualReview.dev";
 const REPO_URL = "https://github.com/Skeyelab/annualreview.com";
 
+/** e.g. "anthropic/claude-3.5-sonnet" → "Claude 3.5 Sonnet", "gpt-4o-mini" → "GPT 4o Mini" */
+function formatModelName(id: string): string {
+  const name = id.includes("/") ? id.split("/")[1] : id;
+  const words = name.replace(/-/g, " ").split(/\s+/);
+  return words
+    .map((w) =>
+      w.toLowerCase() === "gpt" ? "GPT" : w.toLowerCase() === "claude" ? "Claude" : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+    )
+    .join(" ");
+}
+
 interface PipelineResultLike {
   themes?: unknown;
   bullets?: unknown;
@@ -37,6 +48,8 @@ export default function Generate() {
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
   const [creditsPerPurchase, setCreditsPerPurchase] = useState(5);
   const [priceCents, setPriceCents] = useState(100);
+  const [freeModel, setFreeModel] = useState<string>("");
+  const [premiumModel, setPremiumModel] = useState<string>("");
   /** Credits remaining for the stored Stripe session ID, or null if unknown. */
   const [premiumCredits, setPremiumCredits] = useState<number | null>(null);
 
@@ -68,25 +81,30 @@ export default function Generate() {
   useEffect(() => {
     fetch("/api/payments/config")
       .then((res) => (res.ok ? res.json() : { enabled: false }))
-      .then((data: { enabled?: boolean; credits_per_purchase?: number; price_cents?: number }) => {
+      .then((data: {
+        enabled?: boolean;
+        credits_per_purchase?: number;
+        price_cents?: number;
+        free_model?: string;
+        premium_model?: string;
+      }) => {
         setPaymentsEnabled(!!data.enabled);
-        if (data.credits_per_purchase) setCreditsPerPurchase(data.credits_per_purchase);
-        if (data.price_cents) setPriceCents(data.price_cents);
+        if (data.credits_per_purchase != null) setCreditsPerPurchase(data.credits_per_purchase);
+        if (data.price_cents != null) setPriceCents(data.price_cents);
+        if (data.free_model) setFreeModel(data.free_model);
+        if (data.premium_model) setPremiumModel(data.premium_model);
       })
       .catch(() => setPaymentsEnabled(false));
   }, []);
 
-  // Check how many credits remain for any previously-stored Stripe session
+  // Fetch remaining credits when payments are enabled and user is logged in (session cookie identifies user)
   useEffect(() => {
-    if (!paymentsEnabled) return;
-    let sessionId: string | null = null;
-    try { sessionId = localStorage.getItem("premium_stripe_session_id"); } catch { /* ignore */ }
-    if (!sessionId) return;
-    fetch(`/api/payments/credits/${encodeURIComponent(sessionId)}`)
+    if (!paymentsEnabled || !user) return;
+    fetch("/api/payments/credits", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : { credits: 0 }))
       .then((data: { credits?: number }) => setPremiumCredits(data.credits ?? 0))
-      .catch(() => {});
-  }, [paymentsEnabled]);
+      .catch(() => setPremiumCredits(0));
+  }, [paymentsEnabled, user]);
 
   const {
     collectStart,
@@ -116,14 +134,20 @@ export default function Generate() {
       .catch(() => {});
   }, [user]);
 
-  const handleGenerate = async (stripeSessionId?: string) => {
+  const handleGenerate = async (
+    stripeSessionId?: string,
+    evidenceOverride?: string,
+    goalsOverride?: string
+  ) => {
+    const textToUse = evidenceOverride ?? evidenceText;
+    const goalsToUse = goalsOverride ?? goals;
     let evidence: Record<string, unknown>;
     try {
-      evidence = JSON.parse(evidenceText) as Record<string, unknown>;
+      evidence = JSON.parse(textToUse) as Record<string, unknown>;
     } catch {
       const looksTruncated =
-        /[\{\[,]\s*$/.test(evidenceText.trim()) ||
-        !evidenceText.includes('"contributions"');
+        /[\{\[,]\s*$/.test(textToUse.trim()) ||
+        !textToUse.includes('"contributions"');
       setError(
         looksTruncated
           ? 'Invalid JSON—looks truncated (e.g. missing contributions or closing brackets). Try "Upload evidence.json" instead of pasting, or paste the full file again.'
@@ -143,10 +167,10 @@ export default function Generate() {
       return;
     }
     if (
-      (goals as string).trim() &&
+      (goalsToUse as string).trim() &&
       !(evidence as { goals?: string }).goals
     ) {
-      evidence = { ...evidence, goals: (goals as string).trim() };
+      evidence = { ...evidence, goals: (goalsToUse as string).trim() };
     }
     if (stripeSessionId) {
       evidence = { ...evidence, _stripe_session_id: stripeSessionId };
@@ -187,7 +211,7 @@ export default function Generate() {
     } catch (e) {
       const err = e as Error;
       posthog?.capture("review_generate_failed", { error: err.message });
-      setError(err.message || "Pipeline failed. Is OPENAI_API_KEY set?");
+      setError(err.message || "Pipeline failed. Is OPENROUTER_API_KEY set?");
     } finally {
       setLoading(false);
       setProgress("");
@@ -254,8 +278,11 @@ export default function Generate() {
       setGoals(savedGoals);
     }
     if (savedEvidence) {
-      // Short timeout to let state settle before generating
-      const timer = setTimeout(() => handleGenerate(savedSessionId!), STRIPE_RETURN_DELAY_MS);
+      // Use saved evidence/goals directly; state updates are async and may not be visible yet
+      const timer = setTimeout(
+        () => handleGenerate(savedSessionId!, savedEvidence!, savedGoals ?? undefined),
+        STRIPE_RETURN_DELAY_MS
+      );
       return () => clearTimeout(timer);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -620,37 +647,46 @@ yarn normalize --input raw.json --output evidence.json`}
         {progress && <p className="generate-progress">{progress}</p>}
 
         <div className="generate-actions">
-          <button
-            type="button"
-            className="generate-btn"
-            onClick={() => handleGenerate()}
-            disabled={loading}
-          >
-            {loading ? "Generating…" : paymentsEnabled ? "3. Generate review (free)" : "3. Generate review"}
-          </button>
-          {paymentsEnabled && (
-            premiumCredits !== null && premiumCredits > 0 ? (
-              <button
-                type="button"
-                className="generate-btn generate-btn-premium"
-                onClick={handleUsePremiumCredit}
-                disabled={loading}
-                title="Uses a state-of-the-art model for a higher quality report"
-              >
-                ✦ Generate premium report
-                <span className="generate-btn-credits">{premiumCredits} credit{premiumCredits !== 1 ? "s" : ""} left</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="generate-btn generate-btn-premium"
-                onClick={handleUpgradeToPremium}
-                disabled={loading}
-                title={`${creditsPerPurchase} premium ${creditsPerPurchase === 1 ? "run" : "runs"} for $${(priceCents / 100).toFixed(2)} — uses a state-of-the-art model`}
-              >
-                ✦ Get {creditsPerPurchase} premium {creditsPerPurchase === 1 ? "run" : "runs"} (${(priceCents / 100).toFixed(2)})
-              </button>
-            )
+          <div className="generate-actions-buttons">
+            <button
+              type="button"
+              className="generate-btn"
+              onClick={() => handleGenerate()}
+              disabled={loading}
+            >
+              {loading ? "Generating…" : paymentsEnabled ? "3. Generate review (free)" : "3. Generate review"}
+            </button>
+            {paymentsEnabled && (
+              premiumCredits !== null && premiumCredits > 0 ? (
+                <button
+                  type="button"
+                  className="generate-btn generate-btn-premium"
+                  onClick={handleUsePremiumCredit}
+                  disabled={loading}
+                  title={`Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model`}
+                >
+                  ✦ Generate premium report
+                  <span className="generate-btn-credits">{premiumCredits} credit{premiumCredits !== 1 ? "s" : ""} left</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="generate-btn generate-btn-premium"
+                  onClick={handleUpgradeToPremium}
+                  disabled={loading}
+                  title={`${creditsPerPurchase} credits for $${(priceCents / 100).toFixed(2)} (1 run = 1 credit). Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model.`}
+                >
+                  ✦ Upgrade to premium — {creditsPerPurchase} credits for ${(priceCents / 100).toFixed(2)}
+                </button>
+              )
+            )}
+          </div>
+          {(freeModel || premiumModel) && (
+            <p className="generate-models-hint">
+              {freeModel && <span>Free: {formatModelName(freeModel)}</span>}
+              {freeModel && premiumModel && " · "}
+              {premiumModel && <span>Premium: {formatModelName(premiumModel)}</span>}
+            </p>
           )}
         </div>
 

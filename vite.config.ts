@@ -45,6 +45,7 @@ import { authRoutes } from "./server/routes/auth.ts";
 import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
+import { paymentsRoutes } from "./server/routes/payments.ts";
 
 function apiRoutesPlugin() {
   return {
@@ -52,10 +53,26 @@ function apiRoutesPlugin() {
     configureServer(server: ViteDevServer, config?: ConfigEnv) {
       const mode = config?.mode ?? "development";
       const env = loadEnv(mode, process.cwd(), "");
-      if (env.POSTHOG_API_KEY !== undefined)
-        process.env.POSTHOG_API_KEY = env.POSTHOG_API_KEY;
-      if (env.POSTHOG_HOST !== undefined)
-        process.env.POSTHOG_HOST = env.POSTHOG_HOST;
+      const copyIfSet = (key: string) => {
+        if (env[key] !== undefined) process.env[key] = env[key];
+      };
+      [
+        "POSTHOG_API_KEY",
+        "POSTHOG_HOST",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "STRIPE_PRICE_CENTS",
+        "STRIPE_CURRENCY",
+        "CREDITS_PER_PURCHASE",
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "DATABASE_URL",
+        "SESSION_SECRET",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "LLM_MODEL",
+        "PREMIUM_LLM_MODEL",
+      ].forEach(copyIfSet);
       const sessionSecret =
         env.SESSION_SECRET || process.env.SESSION_SECRET || "dev-secret";
       const clientId = env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID;
@@ -129,6 +146,9 @@ function apiRoutesPlugin() {
           createJob,
           runInBackground,
           runPipeline,
+          getSessionIdFromRequest: (r) =>
+            getSessionIdFromRequest(r, sessionSecret),
+          getSession,
         })
       );
 
@@ -146,11 +166,23 @@ function apiRoutesPlugin() {
           collectAndNormalize,
         })
       );
+
+      server.middlewares.use(
+        "/api/payments",
+        paymentsRoutes({
+          respondJson,
+          getSessionIdFromRequest: (r) =>
+            getSessionIdFromRequest(r, sessionSecret),
+          getSession,
+        })
+      );
     },
   };
 }
 
+
 export default defineConfig({
   plugins: [react(), apiRoutesPlugin()],
   envPrefix: ["VITE_", "POSTHOG"],
+
 });

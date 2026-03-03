@@ -205,9 +205,9 @@ describe("paymentsRoutes – webhook", () => {
     }
   });
 
-  it("awards credits on checkout.session.completed when payment_status is paid", async () => {
+  it.skipIf(!process.env.DATABASE_URL)("awards credits on checkout.session.completed when payment_status is paid", async () => {
     const { clearCreditStore, getCredits } = await import("../lib/payment-store.ts");
-    clearCreditStore();
+    await clearCreditStore();
     const stripeEvent = {
       type: "checkout.session.completed",
       data: {
@@ -236,16 +236,16 @@ describe("paymentsRoutes – webhook", () => {
       await new Promise((r) => setTimeout(r, 100));
       expect(res.statusCode).toBe(200);
       expect(res.body).toMatchObject({ received: true });
-      expect(getCredits("alice")).toBe(1);
+      expect(await getCredits("alice")).toBe(1);
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;
     }
   });
 
-  it("does NOT award credits on checkout.session.completed when payment_status is unpaid (async payment method)", async () => {
+  it.skipIf(!process.env.DATABASE_URL)("does NOT award credits on checkout.session.completed when payment_status is unpaid (async payment method)", async () => {
     const { clearCreditStore, getCredits } = await import("../lib/payment-store.ts");
-    clearCreditStore();
+    await clearCreditStore();
     const stripeEvent = {
       type: "checkout.session.completed",
       data: {
@@ -273,7 +273,7 @@ describe("paymentsRoutes – webhook", () => {
       });
       await new Promise((r) => setTimeout(r, 100));
       expect(res.statusCode).toBe(200);
-      expect(getCredits("bob")).toBe(0);
+      expect(await getCredits("bob")).toBe(0);
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;

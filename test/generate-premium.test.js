@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateRoutes } from "../server/routes/generate.ts";
 import { clearCreditStore, awardCredits, getCredits } from "../lib/payment-store.ts";
 
+const hasDb = !!process.env.DATABASE_URL;
+
 function respondJson(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -52,8 +54,10 @@ function makeOptionsLoggedIn(login, overrides = {}) {
   });
 }
 
-describe("generateRoutes – premium flag", () => {
-  beforeEach(() => clearCreditStore());
+describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
+  beforeEach(async () => {
+    await clearCreditStore();
+  });
 
   it("runs free pipeline when no stripe_session_id and no _premium flag", async () => {
     const opts = makeOptions();
@@ -111,7 +115,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("runs premium pipeline and deducts one credit when user has credits", async () => {
-    awardCredits("alice", "cs_prev_purchase"); // award 1 credit to alice
+    await awardCredits("alice", "cs_prev_purchase"); // award 1 credit to alice
     const opts = makeOptionsLoggedIn("alice", {
       readJsonBody: vi.fn().mockResolvedValue({
         ...validEvidence,
@@ -130,11 +134,11 @@ describe("generateRoutes – premium flag", () => {
     expect(res.body).toMatchObject({ job_id: "job-1", premium: true });
     // 1 awarded, 1 deducted → 0 remaining
     expect(res.body.credits_remaining).toBe(0);
-    expect(getCredits("alice")).toBe(0);
+    expect(await getCredits("alice")).toBe(0);
   });
 
   it("runs premium pipeline via _premium flag (no session ID needed for repeat use)", async () => {
-    awardCredits("bob", "cs_bob_purchase");
+    await awardCredits("bob", "cs_bob_purchase");
     const opts = makeOptionsLoggedIn("bob", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
     });
@@ -196,7 +200,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("returns 402 when all credits are exhausted", async () => {
-    awardCredits("fiona", "cs_fiona");
+    await awardCredits("fiona", "cs_fiona");
     // Use all 1 credit
     for (let i = 0; i < 1; i++) {
       const res = mockRes();
@@ -215,7 +219,7 @@ describe("generateRoutes – premium flag", () => {
   });
 
   it("strips _stripe_session_id and _premium from evidence before pipeline", async () => {
-    awardCredits("grace", "cs_grace");
+    await awardCredits("grace", "cs_grace");
     let capturedEvidence = null;
     const opts = makeOptionsLoggedIn("grace", {
       readJsonBody: vi.fn().mockResolvedValue({

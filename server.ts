@@ -1,23 +1,13 @@
 /**
  * Production server: serves dist/ and the same API routes as the Vite dev server.
  * For Coolify (or any Node host): run `yarn build && yarn start` (or `node --import tsx/esm server.ts`).
- * Set PORT (default 3000), SESSION_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and either OPENROUTER_API_KEY (recommended) or OPENAI_API_KEY.
- * Optional: LLM_MODEL to override the default model (anthropic/claude-3.5-sonnet for OpenRouter, gpt-4o-mini for OpenAI).
+ * Set PORT (default 3000), SESSION_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and OPENROUTER_API_KEY.
+ * Optional: LLM_MODEL, PREMIUM_LLM_MODEL (defaults: Claude 3 Haiku free, Claude 3.5 Sonnet premium).
  * Optional: POSTHOG_API_KEY (and POSTHOG_HOST) for LLM analytics and Node logs in PostHog.
  *
- * --- Premium credits (SQLite) ---
+ * --- Premium credits (Postgres) ---
  * Optional: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_CENTS (default 100), STRIPE_CURRENCY (default "usd"), CREDITS_PER_PURCHASE (default 5).
- * Optional: CREDITS_DB_PATH – absolute path for the SQLite credits database (default: <cwd>/credits.db).
- *
- * Coolify / Docker deployment note:
- *   SQLite survives container *restarts* but is wiped on *redeployments* (the old
- *   container is replaced). To persist credits across deploys you MUST mount a
- *   persistent volume in Coolify and point CREDITS_DB_PATH at a file inside it.
- *
- *   Example Coolify "Persistent Storage" entry:
- *     Host path : /opt/annualreview-data
- *     Mount path: /data
- *   Then set env var: CREDITS_DB_PATH=/data/credits.db
+ * DATABASE_URL – Neon (or any Postgres) connection string for credits and credit_events tables. Required when using premium/payments.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFile } from "fs/promises";

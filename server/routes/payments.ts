@@ -12,7 +12,8 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
 import { PostHog } from "posthog-node";
 import Stripe from "stripe";
-import { awardCredits, getCredits, CREDITS_PER_PURCHASE } from "../../lib/payment-store.js";
+import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
+import { getDefaultModels } from "../../lib/run-pipeline.js";
 
 const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
 
@@ -101,23 +102,26 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         getSession
       );
       const enabled = stripeConfigured && flagEnabled;
+      const { free: freeModel, premium: premiumModel } = getDefaultModels();
       respondJson(res, 200, {
         enabled,
         price_cents: Number(process.env.STRIPE_PRICE_CENTS) || 100,
-        credits_per_purchase: CREDITS_PER_PURCHASE,
+        credits_per_purchase: getCreditsPerPurchase(),
+        free_model: freeModel,
+        premium_model: premiumModel,
       });
       return;
     }
 
-    // GET /credits – returns remaining credits for the logged-in user
-    if (path === "credits" && req.method === "GET") {
+    // GET /credits or GET /credits/:anything – returns remaining credits for the logged-in user
+    if ((path === "credits" || path.startsWith("credits/")) && req.method === "GET") {
       const sessId = getSessionIdFromRequest(req);
       const userSession = sessId ? getSession(sessId) : undefined;
       if (!userSession?.login) {
         respondJson(res, 401, { error: "Login required" });
         return;
       }
-      respondJson(res, 200, { credits: getCredits(userSession.login) });
+      respondJson(res, 200, { credits: await getCredits(userSession.login) });
       return;
     }
     if (path === "checkout" && req.method === "POST") {
@@ -171,7 +175,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
                 unit_amount: priceCents,
                 product_data: {
                   name: "Premium Annual Review Report",
-                  description: `${CREDITS_PER_PURCHASE} higher-quality AI report runs using a state-of-the-art model`,
+                  description: `${getCreditsPerPurchase()} higher-quality AI report runs using a state-of-the-art model`,
                 },
               },
             },
@@ -189,6 +193,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     }
 
     if (path === "webhook" && req.method === "POST") {
+      console.log("[payments] webhook received");
       const stripe = getStripe();
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       if (!stripe || !webhookSecret) {
@@ -203,6 +208,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           return;
         }
         const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+        console.log("[payments] webhook event:", event.type);
         if (event.type === "checkout.session.completed") {
           const session = event.data.object as Stripe.Checkout.Session;
           // Award credits to the GitHub user who initiated the checkout.
@@ -211,12 +217,16 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           // always be 'paid' here, but the check is kept for defense-in-depth.
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
-            awardCredits(userLogin, session.id);
+            await awardCredits(userLogin, session.id);
+            console.log("[payments] credits awarded");
+          } else {
+            console.log("[payments] checkout.session.completed skipped: payment_status =", session.payment_status);
           }
         }
         respondJson(res, 200, { received: true });
       } catch (e) {
         const err = e as Error;
+        console.error("[payments] webhook error:", err.message);
         respondJson(res, 400, { error: err.message || "Webhook error" });
       }
       return;
