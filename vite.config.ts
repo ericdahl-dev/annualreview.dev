@@ -72,6 +72,8 @@ function apiRoutesPlugin() {
         "GITHUB_CLIENT_SECRET",
         "LLM_MODEL",
         "PREMIUM_LLM_MODEL",
+        "MAX_USER_TOKENS_FREE",
+        "MAX_USER_TOKENS_PREMIUM",
       ].forEach(copyIfSet);
       const sessionSecret =
         env.SESSION_SECRET || process.env.SESSION_SECRET || "dev-secret";

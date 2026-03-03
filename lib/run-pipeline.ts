@@ -198,7 +198,7 @@ export function getDefaultModels(): { free: string; premium: string } {
 }
 
 /** Max user-message tokens by tier (leaves room for system + response). Env override: MAX_USER_TOKENS_FREE, MAX_USER_TOKENS_PREMIUM. */
-export function getMaxUserTokensForModel(premium: boolean): number {
+export function getMaxUserTokensForTier(premium: boolean): number {
   const envKey = premium ? "MAX_USER_TOKENS_PREMIUM" : "MAX_USER_TOKENS_FREE";
   const val = process.env[envKey];
   if (val != null && val !== "") {
@@ -283,7 +283,7 @@ export async function runPipeline(
     }
   }
 
-  const maxUserTokens = getMaxUserTokensForModel(premium);
+  const maxUserTokens = getMaxUserTokensForTier(premium);
   evidence = fitEvidenceToBudget(evidence, (ev) => STEPS[0].buildInput(ev, {}), maxUserTokens);
 
   const previousResults: Record<string, unknown> = {};
