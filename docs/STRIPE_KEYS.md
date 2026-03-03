@@ -16,6 +16,7 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 - **Where:** [Webhooks](https://dashboard.stripe.com/webhooks) → Add endpoint (or open existing) → “Reveal” signing secret.
 - **Endpoint URL:** `https://<your-domain>/api/payments/webhook`  
   The server uses this to verify `checkout.session.completed` and award credits.
+  Register **`checkout.session.completed`** in your Stripe webhook endpoint configuration.
 - Value starts with `whsec_`. Set it in env/secrets; do not commit.
 
 ## Optional
@@ -34,6 +35,7 @@ Payments are only enabled when `STRIPE_SECRET_KEY` is set and the PostHog featur
 ## Stripe best practices (this app)
 
 - **Checkout Sessions only** – One-time payments use [Checkout Sessions](https://docs.stripe.com/api/checkout/sessions); no Charges API or legacy Tokens/Sources.
+- **Card payments only** – The checkout session is created with `payment_method_types: ['card']`, so only synchronous card payments are accepted. Async methods (bank transfer, ACH, SEPA debit) are intentionally excluded.
 - **Stripe-hosted Checkout** – Client redirects to `session.url`; no raw card data on your server.
 - **Webhook verification** – `constructEvent(rawBody, signature, webhookSecret)` validates every webhook.
 - **API version** – Server uses Stripe Node SDK 20.x with API version `2026-02-25.clover` set explicitly in code (see [SDK versioning](https://docs.stripe.com/sdks/set-version)).

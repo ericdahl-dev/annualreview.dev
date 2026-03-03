@@ -646,9 +646,9 @@ yarn normalize --input raw.json --output evidence.json`}
                 className="generate-btn generate-btn-premium"
                 onClick={handleUpgradeToPremium}
                 disabled={loading}
-                title={`${creditsPerPurchase} premium runs for $${(priceCents / 100).toFixed(2)} — uses a state-of-the-art model`}
+                title={`${creditsPerPurchase} premium ${creditsPerPurchase === 1 ? "run" : "runs"} for $${(priceCents / 100).toFixed(2)} — uses a state-of-the-art model`}
               >
-                ✦ Get {creditsPerPurchase} premium runs (${(priceCents / 100).toFixed(2)})
+                ✦ Get {creditsPerPurchase} premium {creditsPerPurchase === 1 ? "run" : "runs"} (${(priceCents / 100).toFixed(2)})
               </button>
             )
           )}
