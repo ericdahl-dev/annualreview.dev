@@ -193,7 +193,7 @@ export interface PipelineOptions {
 export function getDefaultModels(): { free: string; premium: string } {
   return {
     free: process.env.LLM_MODEL ?? "anthropic/claude-3-haiku",
-    premium: process.env.PREMIUM_LLM_MODEL ?? "anthropic/claude-3.5-sonnet",
+    premium: process.env.PREMIUM_LLM_MODEL ?? "anthropic/claude-haiku-4.5",
   };
 }
 
