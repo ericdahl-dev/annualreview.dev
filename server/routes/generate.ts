@@ -25,7 +25,7 @@ export interface GenerateRoutesOptions {
   readJsonBody: (req: IncomingMessage) => Promise<object>;
   respondJson: (res: ServerResponse, status: number, data: object) => void;
   validateEvidence: (evidence: unknown) => ValidationResult;
-  createJob: (type: string) => string;
+  createJob: (type: string, sessionId?: string) => string;
   runInBackground: (
     jobId: string,
     fn: (report: (data: { progress?: string }) => void) => void | Promise<unknown>
@@ -161,7 +161,8 @@ export function generateRoutes(options: GenerateRoutesOptions) {
         creditsRemaining = await getCredits(userLogin);
       }
 
-      const jobId = createJob(premium ? "generate-premium" : "generate");
+      const sessionId = getSessionIdFromRequest(req);
+      const jobId = createJob(premium ? "generate-premium" : "generate", sessionId ?? undefined);
       runInBackground(jobId, (report) =>
         runPipeline(evidence as unknown as Evidence, {
           premium,
