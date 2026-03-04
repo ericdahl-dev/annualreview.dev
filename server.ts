@@ -50,18 +50,14 @@ import {
   getStateFromRequest,
   clearStateCookie,
 } from "./lib/cookies.ts";
-import {
-  readJsonBody,
-  respondJson,
-  randomState,
-  DATE_YYYY_MM_DD,
-} from "./server/helpers.ts";
+import { readJsonBody, respondJson, randomState, DATE_YYYY_MM_DD } from "./server/helpers.ts";
 import { authRoutes } from "./server/routes/auth.ts";
 import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
+import { getSessionSecret } from "./server/session-secret.ts";
 
 const MIME: Record<string, string> = {
   ".html": "text/html",
@@ -113,7 +109,7 @@ function handleRequest(
   const [pathname, queryString] = url.split("?");
   const path = pathname.replace(/^\/+/, "");
 
-  const sessionSecret = process.env.SESSION_SECRET || "dev-secret";
+  const sessionSecret = getSessionSecret();
   const clientId = process.env.GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
   const isSecure = req.headers["x-forwarded-proto"] === "https";

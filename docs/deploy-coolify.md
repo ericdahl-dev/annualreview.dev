@@ -8,7 +8,7 @@ The repo includes `nixpacks.toml` so Nixpacks runs `yarn build` and then `yarn s
    - Server listens on `PORT` (Coolify sets this automatically).
 
 2. **Environment variables** (set in Coolify → your service → Environment)
-   - `SESSION_SECRET` — random string for signing session cookies (e.g. `openssl rand -hex 32`)
+   - `SESSION_SECRET` — **required in production**; random string for signing session cookies (e.g. `openssl rand -hex 32`)
    - `GITHUB_CLIENT_ID` — from [GitHub OAuth App](https://github.com/settings/developers)
    - `GITHUB_CLIENT_SECRET` — from the same OAuth App
    - `OPENROUTER_API_KEY` — **required** for the generate pipeline. Uses OpenRouter with Claude (free: Haiku, premium: Sonnet).

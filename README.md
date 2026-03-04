@@ -65,7 +65,7 @@ The repo ships with `nixpacks.toml` for one-click Coolify deploys. See [docs/dep
 
 | Variable | Description |
 |----------|-------------|
-| `SESSION_SECRET` | Random string for signing session cookies (e.g. `openssl rand -hex 32`) |
+| `SESSION_SECRET` | **Required in production.** Random string for signing session cookies (e.g. `openssl rand -hex 32`). In local dev, the server falls back to a built-in `"dev-secret"` when unset. |
 | `GITHUB_CLIENT_ID` | From your [GitHub OAuth App](https://github.com/settings/developers) |
 | `GITHUB_CLIENT_SECRET` | From the same OAuth App |
 | `OPENROUTER_API_KEY` | LLM provider for the generate pipeline — free tier defaults to `anthropic/claude-3-haiku`, premium to `anthropic/claude-haiku-4.5`. |
