@@ -8,20 +8,26 @@ const mockSelfEval = { sections: { summary: { text: "Done" } } };
 
 let createCallCount = 0;
 let lastCreateArgs = [];
+/** Set to array of 4 content values (string | null | undefined) to override LLM response per step. Reset in beforeEach. */
+let mockStepContentsOverride = null;
 function MockOpenAI() {
-  const contents = [
+  const defaults = [
     JSON.stringify(mockThemes),
     JSON.stringify(mockBullets),
     JSON.stringify(mockStories),
     JSON.stringify(mockSelfEval),
   ];
-  let i = 0;
   this.chat = {
     completions: {
       create: (args) => {
         createCallCount++;
         lastCreateArgs.push(args);
-        return Promise.resolve({ choices: [{ message: { content: contents[i++ % 4] } }] });
+        const stepIndex = createCallCount - 1;
+        const content =
+          mockStepContentsOverride && mockStepContentsOverride[stepIndex] !== undefined
+            ? mockStepContentsOverride[stepIndex]
+            : defaults[stepIndex % 4];
+        return Promise.resolve({ choices: [{ message: { content } }] });
       },
     },
   };
@@ -113,6 +119,7 @@ describe("runPipeline", () => {
   beforeEach(() => {
     createCallCount = 0;
     lastCreateArgs = [];
+    mockStepContentsOverride = null;
     clearPipelineCache();
     process.env.POSTHOG_API_KEY = "ph_test";
   });
@@ -215,5 +222,53 @@ describe("runPipeline", () => {
     await runPipeline(evidence, { apiKey: "sk-test", premium: true });
     const premiumModel = lastCreateArgs[0]?.model;
     expect(premiumModel).not.toBe(freeModel);
+  });
+
+  it("throws step-specific error when LLM returns empty string for a step", async () => {
+    mockStepContentsOverride = [
+      "",
+      JSON.stringify(mockBullets),
+      JSON.stringify(mockStories),
+      JSON.stringify(mockSelfEval),
+    ];
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await expect(runPipeline(evidence, { apiKey: "sk-test" })).rejects.toThrow(
+      /Pipeline step "themes" returned no content/
+    );
+  });
+
+  it("throws step-specific error when LLM returns null content for a step", async () => {
+    mockStepContentsOverride = [
+      null,
+      JSON.stringify(mockBullets),
+      JSON.stringify(mockStories),
+      JSON.stringify(mockSelfEval),
+    ];
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await expect(runPipeline(evidence, { apiKey: "sk-test" })).rejects.toThrow(
+      /Pipeline step "themes" returned no content/
+    );
+  });
+
+  it("throws step-specific error when LLM returns malformed JSON for a step", async () => {
+    mockStepContentsOverride = [
+      "not valid json at all",
+      JSON.stringify(mockBullets),
+      JSON.stringify(mockStories),
+      JSON.stringify(mockSelfEval),
+    ];
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await expect(runPipeline(evidence, { apiKey: "sk-test" })).rejects.toThrow(
+      /Step themes returned invalid JSON/
+    );
   });
 });
