@@ -61,3 +61,17 @@ Turn GitHub contribution evidence into an evidence-backed annual review draft: t
 ## Notes
 - Prefer PRs and reviews as primary evidence.
 - Keep outputs copy/paste friendly; avoid long prose.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+- **Vite dev server** (frontend): `yarn dev` — serves the React SPA on port 5173.
+- **Node.js API server** (backend): `yarn start` — runs `server.ts` on port 3000 (serves built frontend + API routes). For development, `yarn dev` is sufficient for frontend work; the API routes are only available via `yarn start`.
+
+### Key commands
+See `package.json` scripts and the Development section in `README.md`. Summary: `yarn test` (Vitest), `yarn typecheck` (tsc --noEmit), `yarn build` (Vite production build), `yarn dev` (Vite dev server).
+
+### Gotchas
+- Payment/premium tests (`test/payments.test.js`, `test/generate-premium.test.js`) auto-skip when `DATABASE_URL` is not set — this is expected in environments without Postgres.
+- The full generation pipeline requires `OPENROUTER_API_KEY`. Without it the app loads and accepts input, but cannot generate reviews.
+- `yarn dev` starts only the Vite frontend dev server (no API routes). To test API routes locally, run `yarn start` after `yarn build`.
