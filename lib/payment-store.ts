@@ -94,19 +94,18 @@ export async function getCredits(userLogin: string): Promise<number> {
 }
 
 /**
- * Attempt to consume one credit. Returns true if a credit was deducted,
+ * Attempt to consume one credit atomically. Returns true if a credit was deducted,
  * false if the user has no credits remaining.
  */
 export async function deductCredit(userLogin: string): Promise<boolean> {
-  const remaining = await getCredits(userLogin);
-  if (remaining <= 0) return false;
   const p = await getPool();
-  await p.query(
-    `INSERT INTO credits (user_login, remaining) VALUES ($1, $2)
-     ON CONFLICT (user_login) DO UPDATE SET remaining = EXCLUDED.remaining`,
-    [userLogin, remaining - 1]
+  const result = await p.query<{ remaining: number }>(
+    `UPDATE credits SET remaining = remaining - 1
+     WHERE user_login = $1 AND remaining > 0
+     RETURNING remaining`,
+    [userLogin]
   );
-  return true;
+  return (result.rowCount ?? 0) > 0;
 }
 
 /** Reset the store (for tests). Clears all rows. */
@@ -115,17 +114,3 @@ export async function clearCreditStore(): Promise<void> {
   await p.query("DELETE FROM credits");
   await p.query("DELETE FROM credit_events");
 }
-
-// ---------------------------------------------------------------------------
-// Legacy aliases kept while callers migrate to user-login-based API.
-// ---------------------------------------------------------------------------
-/** @deprecated Use awardCredits(userLogin, stripeSessionId) */
-export async function markSessionPaid(sessionId: string): Promise<void> {
-  await awardCredits(sessionId, `legacy_${sessionId}`);
-}
-/** @deprecated Use getCredits(userLogin) > 0 */
-export async function isSessionPaid(sessionId: string): Promise<boolean> {
-  return (await getCredits(sessionId)) > 0;
-}
-/** @deprecated Use clearCreditStore() */
-export const clearPaymentStore = clearCreditStore;

@@ -123,6 +123,7 @@ function handleRequest(
   const cookieOpts = { secure: isSecure };
   const log = (event: string, detail?: string): void =>
     console.error("[auth] " + event + (detail ? " " + detail : ""));
+  const getSessionId = (r: IncomingMessage) => getSessionIdFromRequest(r, sessionSecret);
 
   if (path.startsWith("api/")) {
     const sub = path.slice(4);
@@ -148,7 +149,7 @@ function handleRequest(
           cookieOpts,
           basePath: "/api/auth",
         }),
-        getSessionIdFromRequest: (r) => getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
         destroySession,
         setSessionCookie,
@@ -176,8 +177,7 @@ function handleRequest(
 
     if (area === "jobs") {
       jobsRoutes({
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getLatestJob,
         getJob,
         respondJson,
@@ -193,8 +193,7 @@ function handleRequest(
         createJob,
         runInBackground,
         runPipeline,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
       return;
@@ -203,8 +202,7 @@ function handleRequest(
     if (area === "payments") {
       paymentsRoutes({
         respondJson,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
       return;
@@ -215,8 +213,7 @@ function handleRequest(
         readJsonBody,
         respondJson,
         DATE_YYYY_MM_DD,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
         createJob,
         runInBackground,

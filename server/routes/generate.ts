@@ -18,6 +18,7 @@ import type { PipelineResult } from "../../lib/run-pipeline.js";
 import type { SessionData } from "../../lib/session-store.js";
 import { awardCredits, deductCredit, getCredits } from "../../lib/payment-store.js";
 import Stripe from "stripe";
+import { STRIPE_API_VERSION } from "../config.js";
 
 export interface GenerateRoutesOptions {
   readJsonBody: (req: IncomingMessage) => Promise<object>;
@@ -39,8 +40,6 @@ export interface GenerateRoutesOptions {
 }
 
 type Next = () => void;
-
-const STRIPE_API_VERSION = "2026-02-25.clover" as const;
 
 function defaultGetStripe(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;
