@@ -20,10 +20,3 @@ coverage/
 .turbo/
 .eslintcache
 *.tsbuildinfo
-
-# Backend (backstop; backend/.gitignore has the rest)
-backend/storage/
-backend/log/
-backend/tmp/
-backend/.bundle/
-backend/config/master.key
