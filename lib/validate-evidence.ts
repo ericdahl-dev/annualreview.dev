@@ -3,11 +3,13 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import Ajv, { type ErrorObject } from "ajv";
+import addFormats from "ajv-formats";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(__dirname, "..", "schemas", "evidence.json");
 const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
 const ajv = new Ajv({ strict: false, logger: false });
+addFormats(ajv);
 const validate = ajv.compile(schema);
 
 export type ValidationResult =
