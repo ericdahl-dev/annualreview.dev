@@ -15,7 +15,7 @@ export interface CollectRoutesOptions {
   createJob: (type: string, sessionId?: string) => string;
   runInBackground: (
     jobId: string,
-    fn: () => void | Promise<void>
+    fn: () => void | Promise<unknown>
   ) => void;
   collectAndNormalize: (opts: {
     token: string;

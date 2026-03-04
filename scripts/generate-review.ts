@@ -36,7 +36,7 @@ const BLOCK = 4;
 let stepAnimationId: ReturnType<typeof setInterval> | null = null;
 let stepStartTime = 0;
 
-function stopStepAnimation(): void {
+export function stopStepAnimation(): void {
   if (stepAnimationId != null) {
     clearInterval(stepAnimationId);
     stepAnimationId = null;
@@ -70,7 +70,8 @@ function startStepAnimation(
   }, 80);
 }
 
-function onStepProgress(
+/** Exported for tests that exercise progress animation. */
+export function onStepProgress(
   stepIndex: number,
   total: number,
   label: string,
