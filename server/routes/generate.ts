@@ -126,13 +126,14 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       let premium = false;
       let creditsRemaining: number | undefined;
 
+      const sessId = getSessionIdFromRequest(req);
+
       if (wantsPremium) {
         if (!isPaymentsConfigured()) {
           respondJson(res, 503, { error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
           return;
         }
         // Must be logged in — credits are tied to a GitHub account
-        const sessId = getSessionIdFromRequest(req);
         const userSession = sessId ? getSession(sessId) : undefined;
         if (!userSession?.login) {
           respondJson(res, 401, { error: "Login required for premium generation" });
@@ -161,8 +162,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
         creditsRemaining = await getCredits(userLogin);
       }
 
-      const sessionId = getSessionIdFromRequest(req);
-      const jobId = createJob(premium ? "generate-premium" : "generate", sessionId ?? undefined);
+      const jobId = createJob(premium ? "generate-premium" : "generate", sessId ?? undefined);
       runInBackground(jobId, (report) =>
         runPipeline(evidence as unknown as Evidence, {
           premium,

@@ -65,6 +65,17 @@ describe("generateRoutes – payments not configured", () => {
     expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
   });
+
+  it("passes session id to createJob for free generate when session present", async () => {
+    const opts = makeOptions({
+      getSessionIdFromRequest: vi.fn().mockReturnValue("sess_anon"),
+    });
+    const handler = generateRoutes(opts);
+    const req = { method: "POST", url: "/" };
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(opts.createJob).toHaveBeenCalledWith("generate", "sess_anon");
+  });
 });
 
 describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
@@ -85,17 +96,6 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     );
     expect(res.body).toMatchObject({ job_id: "job-1", premium: false });
     expect(res.body).not.toHaveProperty("credits_remaining");
-  });
-
-  it("passes session id to createJob for free generate when session present", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: vi.fn().mockReturnValue("sess_anon"),
-    });
-    const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
-    const res = mockRes();
-    await handler(req, res, () => {});
-    expect(opts.createJob).toHaveBeenCalledWith("generate", "sess_anon");
   });
 
   it("passes session id to createJob for premium generate when logged in", async () => {
