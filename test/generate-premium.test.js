@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateRoutes } from "../server/routes/generate.ts";
 import { clearCreditStore, awardCredits, getCredits } from "../lib/payment-store.ts";
+import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
 import { mockRes, respondJson } from "./helpers.js";
 
 const hasDb = !!process.env.DATABASE_URL;
@@ -48,7 +49,7 @@ describe("generateRoutes – payments not configured", () => {
     const res = mockRes();
     await handler({ method: "POST", url: "/" }, res, () => {});
     expect(res.statusCode).toBe(503);
-    expect(res.body).toMatchObject({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+    expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
   });
 
@@ -61,7 +62,7 @@ describe("generateRoutes – payments not configured", () => {
     const res = mockRes();
     await handler({ method: "POST", url: "/" }, res, () => {});
     expect(res.statusCode).toBe(503);
-    expect(res.body).toMatchObject({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+    expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
   });
 });

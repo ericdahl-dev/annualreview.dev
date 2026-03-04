@@ -10,6 +10,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useGitHubCollect } from "./hooks/useGitHubCollect";
 import CollectForm from "./CollectForm";
 import NarrativeView, { type NarrativeViewProps } from "./NarrativeView";
+import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.js";
 
 /** Milliseconds to wait for React state to settle before auto-generating after Stripe redirect. */
 const STRIPE_RETURN_DELAY_MS = 100;
@@ -203,7 +204,7 @@ export default function Generate() {
         }
         posthog?.capture("review_generate_completed", { premium: !!data.premium });
       } else if (!res.ok) {
-        if ((data as { code?: string }).code === "PAYMENTS_NOT_CONFIGURED") {
+        if ((data as { code?: string }).code === PAYMENTS_NOT_CONFIGURED) {
           throw new Error("Premium generation is not available in this environment. Please use the free tier.");
         }
         throw new Error((data.error as string) || "Generate failed");
