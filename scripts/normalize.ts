@@ -24,10 +24,10 @@ function parseArgs(argv: string[] = process.argv.slice(2)): Record<string, unkno
   return parseArgsBase(NORMALIZE_SCHEMA, argv);
 }
 
-function parseDate(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+function parseDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  const parsedDate = new Date(dateStr);
+  return isNaN(parsedDate.getTime()) ? null : parsedDate;
 }
 
 function inRange(
@@ -260,54 +260,54 @@ export function normalize(
   }
 
   const rawReviews = raw.reviews || [];
-  for (const r of rawReviews) {
+  for (const review of rawReviews) {
     const repo =
-      r.repository?.full_name || r.repo || raw.repo || "";
+      review.repository?.full_name || review.repo || raw.repo || "";
     const pullNumber =
-      r.pull_request_url?.split("/").pop() || r.pull_number;
-    const date = r.submitted_at || r.created_at;
+      review.pull_request_url?.split("/").pop() || review.pull_number;
+    const date = review.submitted_at || review.created_at;
     if (start || end) {
       if (!inRange(date, start, end)) continue;
     }
-    contributions.push(normalizeReview(r, repo, pullNumber ?? ""));
+    contributions.push(normalizeReview(review, repo, pullNumber ?? ""));
   }
 
   const rawReleases = raw.releases || [];
-  for (const rel of rawReleases) {
-    const repo = rel.target_commitish
+  for (const release of rawReleases) {
+    const repo = release.target_commitish
       ? raw.repo || ""
-      : rel.repository?.full_name || raw.repo || "";
-    const date = rel.published_at || rel.created_at;
+      : release.repository?.full_name || raw.repo || "";
+    const date = release.published_at || release.created_at;
     if (start || end) {
       if (!inRange(date, start, end)) continue;
     }
-    contributions.push(normalizeRelease(rel, repo));
+    contributions.push(normalizeRelease(release, repo));
   }
 
   const rawCommits = raw.commits || [];
   const commitShaToPr = new Map<string, boolean>();
   for (const pr of rawPrs) {
     const shas = Array.isArray(pr.commits) ? pr.commits : [];
-    for (const c of shas) {
+    for (const commitRef of shas) {
       const sha =
-        typeof c === "string" ? c : (c as { sha?: string }).sha ?? (c as { commit?: { sha?: string } }).commit?.sha;
+        typeof commitRef === "string" ? commitRef : (commitRef as { sha?: string }).sha ?? (commitRef as { commit?: { sha?: string } }).commit?.sha;
       if (sha) commitShaToPr.set(sha, true);
     }
   }
-  for (const c of rawCommits) {
-    const sha = c.sha || c.commit?.sha;
+  for (const commit of rawCommits) {
+    const sha = commit.sha || commit.commit?.sha;
     const repo =
-      (c as RawCommit & { repository?: { full_name?: string } }).repository
+      (commit as RawCommit & { repository?: { full_name?: string } }).repository
         ?.full_name || raw.repo || "";
     const date =
-      c.commit?.author?.date ||
-      c.commit?.committer?.date ||
-      (c as RawCommit).author?.date;
+      commit.commit?.author?.date ||
+      commit.commit?.committer?.date ||
+      (commit as RawCommit).author?.date;
     if (start || end) {
       if (!inRange(date, start, end)) continue;
     }
     if (sha && commitShaToPr.has(sha)) continue;
-    contributions.push(normalizeCommit(c, repo, sha));
+    contributions.push(normalizeCommit(commit, repo, sha));
   }
 
   const startDate =

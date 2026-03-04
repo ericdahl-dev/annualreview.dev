@@ -50,17 +50,17 @@ function collectEvidenceIds(
   stories: Record<string, unknown> | null = null
 ): Set<string> {
   const ids = new Set<string>();
-  for (const t of (themes as { themes?: Array<{ evidence_ids?: string[]; anchor_evidence?: Array<{ id?: string }> }> })?.themes ?? []) {
-    for (const id of t.evidence_ids ?? []) ids.add(id);
-    for (const a of t.anchor_evidence ?? []) if (a?.id) ids.add(a.id);
+  for (const theme of (themes as { themes?: Array<{ evidence_ids?: string[]; anchor_evidence?: Array<{ id?: string }> }> })?.themes ?? []) {
+    for (const id of theme.evidence_ids ?? []) ids.add(id);
+    for (const anchor of theme.anchor_evidence ?? []) if (anchor?.id) ids.add(anchor.id);
   }
-  for (const g of (bullets as { bullets_by_theme?: Array<{ bullets?: Array<{ evidence?: Array<{ id?: string }> }> }> })?.bullets_by_theme ?? []) {
-    for (const b of g.bullets ?? []) {
-      for (const e of b.evidence ?? []) if (e?.id) ids.add(e.id);
+  for (const bulletGroup of (bullets as { bullets_by_theme?: Array<{ bullets?: Array<{ evidence?: Array<{ id?: string }> }> }> })?.bullets_by_theme ?? []) {
+    for (const bullet of bulletGroup.bullets ?? []) {
+      for (const evidenceItem of bullet.evidence ?? []) if (evidenceItem?.id) ids.add(evidenceItem.id);
     }
   }
-  for (const s of (stories as { stories?: Array<{ evidence?: Array<{ id?: string }> }> })?.stories ?? []) {
-    for (const e of s.evidence ?? []) if (e?.id) ids.add(e.id);
+  for (const story of (stories as { stories?: Array<{ evidence?: Array<{ id?: string }> }> })?.stories ?? []) {
+    for (const evidenceItem of story.evidence ?? []) if (evidenceItem?.id) ids.add(evidenceItem.id);
   }
   return ids;
 }
@@ -242,9 +242,9 @@ export async function runPipeline(
     return cached;
   }
 
-  const phKey = process.env.POSTHOG_API_KEY;
-  const phClient = phKey
-    ? new PostHog(phKey, { host: process.env.POSTHOG_HOST || "https://us.i.posthog.com" })
+  const posthogApiKey = process.env.POSTHOG_API_KEY;
+  const posthogClient = posthogApiKey
+    ? new PostHog(posthogApiKey, { host: process.env.POSTHOG_HOST || "https://us.i.posthog.com" })
     : null;
   const clientOpts: ConstructorParameters<typeof OpenAI>[0] = { apiKey };
   if (baseURL) {
@@ -254,16 +254,16 @@ export async function runPipeline(
       "X-Title": "AnnualReview.dev",
     };
   }
-  const openai: OpenAI = phClient
-    ? new PostHogOpenAI({ ...clientOpts, posthog: phClient }) as unknown as OpenAI
+  const openai: OpenAI = posthogClient
+    ? new PostHogOpenAI({ ...clientOpts, posthog: posthogClient }) as unknown as OpenAI
     : new OpenAI(clientOpts);
 
   const total = STEPS.length;
   const posthogOpts: Record<string, string | boolean> = {};
   if (posthogTraceId != null) posthogOpts.posthogTraceId = posthogTraceId;
   if (posthogDistinctId != null) posthogOpts.posthogDistinctId = posthogDistinctId;
-  if (phClient) posthogOpts.posthogCaptureImmediate = true; // send each generation immediately so we don't rely on shutdown flush
-  if (phClient && baseURL?.includes("openrouter.ai")) posthogOpts.posthogProviderOverride = "openrouter"; // correct $ai_provider in PostHog LLM analytics
+  if (posthogClient) posthogOpts.posthogCaptureImmediate = true; // send each generation immediately so we don't rely on shutdown flush
+  if (posthogClient && baseURL?.includes("openrouter.ai")) posthogOpts.posthogProviderOverride = "openrouter"; // correct $ai_provider in PostHog LLM analytics
 
   try {
   const totalStart = Date.now();
@@ -297,7 +297,7 @@ export async function runPipeline(
     const stepStart = Date.now();
     const input = step.buildInput(evidence, previousResults);
     const promptContent = loadPrompt(step.promptFile);
-    const res = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: resolvedModel,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -305,7 +305,7 @@ export async function runPipeline(
       ],
       ...posthogOpts,
     });
-    const stepResult = extractJson(res.choices[0]?.message?.content ?? "{}");
+    const stepResult = extractJson(completion.choices[0]?.message?.content ?? "{}");
     previousResults[step.key] = stepResult;
     prevStepMs = Date.now() - stepStart;
     prevStepPayloadTokens = estimateTokens(input);
@@ -326,6 +326,6 @@ export async function runPipeline(
   resultCache.set(key, result);
   return result;
   } finally {
-    if (phClient) await phClient.shutdown();
+    if (posthogClient) await posthogClient.shutdown();
   }
 }

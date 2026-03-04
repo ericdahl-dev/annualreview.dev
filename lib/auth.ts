@@ -17,11 +17,11 @@ export function getAuthRedirectUrl(
   redirectUri: string,
   clientId: string
 ): string {
-  const s = SCOPES[scope] || SCOPES.public;
+  const githubScope = SCOPES[scope] || SCOPES.public;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: s,
+    scope: githubScope,
     state,
   });
   return `${GITHUB_AUTH}?${params.toString()}`;

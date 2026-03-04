@@ -62,21 +62,21 @@ export async function awardCredits(
   stripeSessionId: string,
   count = getCreditsPerPurchase()
 ): Promise<void> {
-  const p = await getPool();
+  const db = await getPool();
   const awardedAt = new Date().toISOString();
-  const insertEvent = await p.query(
+  const insertEvent = await db.query(
     `INSERT INTO credit_events (stripe_session_id, user_login, awarded_at) VALUES ($1, $2, $3)
      ON CONFLICT (stripe_session_id) DO NOTHING`,
     [stripeSessionId, userLogin, awardedAt]
   );
   if (insertEvent.rowCount === 0) return; // already processed — idempotent
 
-  const currentRow = await p.query<{ remaining: number }>(
+  const currentRow = await db.query<{ remaining: number }>(
     "SELECT remaining FROM credits WHERE user_login = $1",
     [userLogin]
   );
   const current = currentRow.rows[0]?.remaining ?? 0;
-  await p.query(
+  await db.query(
     `INSERT INTO credits (user_login, remaining) VALUES ($1, $2)
      ON CONFLICT (user_login) DO UPDATE SET remaining = EXCLUDED.remaining`,
     [userLogin, current + count]
@@ -85,8 +85,8 @@ export async function awardCredits(
 
 /** Return how many credits remain for a user (0 if unknown). */
 export async function getCredits(userLogin: string): Promise<number> {
-  const p = await getPool();
-  const row = await p.query<{ remaining: number }>(
+  const db = await getPool();
+  const row = await db.query<{ remaining: number }>(
     "SELECT remaining FROM credits WHERE user_login = $1",
     [userLogin]
   );
@@ -98,8 +98,8 @@ export async function getCredits(userLogin: string): Promise<number> {
  * false if the user has no credits remaining.
  */
 export async function deductCredit(userLogin: string): Promise<boolean> {
-  const p = await getPool();
-  const result = await p.query<{ remaining: number }>(
+  const db = await getPool();
+  const result = await db.query<{ remaining: number }>(
     `UPDATE credits SET remaining = remaining - 1
      WHERE user_login = $1 AND remaining > 0
      RETURNING remaining`,
@@ -110,7 +110,7 @@ export async function deductCredit(userLogin: string): Promise<boolean> {
 
 /** Reset the store (for tests). Clears all rows. */
 export async function clearCreditStore(): Promise<void> {
-  const p = await getPool();
-  await p.query("DELETE FROM credits");
-  await p.query("DELETE FROM credit_events");
+  const db = await getPool();
+  await db.query("DELETE FROM credits");
+  await db.query("DELETE FROM credit_events");
 }
