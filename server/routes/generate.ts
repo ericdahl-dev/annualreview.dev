@@ -27,7 +27,7 @@ export interface GenerateRoutesOptions {
   createJob: (type: string) => string;
   runInBackground: (
     jobId: string,
-    fn: (report: (data: { progress?: string }) => void) => void | Promise<void>
+    fn: (report: (data: { progress?: string }) => void) => void | Promise<unknown>
   ) => void;
   runPipeline: (
     evidence: Evidence,
@@ -155,7 +155,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
 
       const jobId = createJob(premium ? "generate-premium" : "generate");
       runInBackground(jobId, (report) =>
-        runPipeline(evidence as Evidence, {
+        runPipeline(evidence as unknown as Evidence, {
           premium,
           onProgress: ({ stepIndex, total, label }) =>
             report({ progress: `${stepIndex}/${total} ${label}` }),

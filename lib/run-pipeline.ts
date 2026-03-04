@@ -254,8 +254,13 @@ export async function runPipeline(
       "X-Title": "AnnualReview.dev",
     };
   }
+  const posthogOpenAIOptions = {
+    ...clientOpts,
+    apiKey,
+    posthog: posthogClient,
+  } as ConstructorParameters<typeof PostHogOpenAI>[0];
   const openai: OpenAI = posthogClient
-    ? new PostHogOpenAI({ ...clientOpts, posthog: posthogClient }) as unknown as OpenAI
+    ? new PostHogOpenAI(posthogOpenAIOptions) as unknown as OpenAI
     : new OpenAI(clientOpts);
 
   const total = STEPS.length;
