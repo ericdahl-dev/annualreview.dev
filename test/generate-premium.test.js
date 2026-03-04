@@ -65,6 +65,17 @@ describe("generateRoutes – payments not configured", () => {
     expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
   });
+
+  it("passes session id to createJob for free generate when session present", async () => {
+    const opts = makeOptions({
+      getSessionIdFromRequest: vi.fn().mockReturnValue("sess_anon"),
+    });
+    const handler = generateRoutes(opts);
+    const req = { method: "POST", url: "/" };
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(opts.createJob).toHaveBeenCalledWith("generate", "sess_anon");
+  });
 });
 
 describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
@@ -78,13 +89,25 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     const req = { method: "POST", url: "/" };
     const res = mockRes();
     await handler(req, res, () => {});
-    expect(opts.createJob).toHaveBeenCalledWith("generate");
+    expect(opts.createJob).toHaveBeenCalledWith("generate", undefined);
     expect(opts.runPipeline).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ premium: false })
     );
     expect(res.body).toMatchObject({ job_id: "job-1", premium: false });
     expect(res.body).not.toHaveProperty("credits_remaining");
+  });
+
+  it("passes session id to createJob for premium generate when logged in", async () => {
+    await awardCredits("alice", "cs_prev");
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+    });
+    const handler = generateRoutes(opts);
+    const req = { method: "POST", url: "/" };
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
   });
 
   it("returns 401 when requesting premium but not logged in", async () => {
@@ -139,7 +162,7 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     const req = { method: "POST", url: "/" };
     const res = mockRes();
     await handler(req, res, () => {});
-    expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
+    expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
     expect(opts.runPipeline).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ premium: true })
@@ -159,7 +182,7 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     const req = { method: "POST", url: "/" };
     const res = mockRes();
     await handler(req, res, () => {});
-    expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
+    expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
     expect(res.body.credits_remaining).toBe(0);
   });
 
@@ -183,7 +206,7 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     const req = { method: "POST", url: "/" };
     const res = mockRes();
     await handler(req, res, () => {});
-    expect(opts.createJob).toHaveBeenCalledWith("generate-premium");
+    expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
     // 1 awarded, 1 deducted → 0 remaining
     expect(res.body.credits_remaining).toBe(0);
   });
