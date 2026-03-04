@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Generate from "../src/Generate.tsx";
 import { pollJob } from "../src/api.js";
+import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
 
 /** Response-like mock: component uses res.text() or res.json() depending on route. */
 function mockRes(body, ok = true, status = ok ? 200 : 400) {
@@ -143,6 +144,32 @@ describe("Generate", () => {
     expect(screen.getByText(/signed in as/i)).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /fetch your data/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /fetch my data/i })).toBeInTheDocument();
+  });
+
+  it("shows specific message when API returns 503 PAYMENTS_NOT_CONFIGURED", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate")
+        return Promise.resolve(
+          mockRes({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED }, false, 503)
+        );
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/payments/config"));
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: {
+        value: JSON.stringify({
+          timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+          contributions: [],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/premium generation is not available/i)).toBeInTheDocument();
+    });
   });
 
   it("premium button hidden when payments not enabled", async () => {
