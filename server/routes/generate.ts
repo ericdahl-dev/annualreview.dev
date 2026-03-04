@@ -16,7 +16,8 @@ import type { ValidationResult } from "../../lib/validate-evidence.js";
 import type { Evidence } from "../../types/evidence.js";
 import type { PipelineResult } from "../../lib/run-pipeline.js";
 import type { SessionData } from "../../lib/session-store.js";
-import { awardCredits, deductCredit, getCredits, isPaymentsConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
+import { awardCredits, deductCredit, getCredits, isCreditStoreConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
+import { PAYMENTS_NOT_CONFIGURED } from "../../lib/api-error-codes.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
 
@@ -127,7 +128,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
 
       if (wantsPremium) {
         if (!isPaymentsConfigured()) {
-          respondJson(res, 503, { error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+          respondJson(res, 503, { error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
           return;
         }
         // Must be logged in — credits are tied to a GitHub account

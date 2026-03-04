@@ -104,8 +104,19 @@ export async function deductCredit(userLogin: string): Promise<boolean> {
 }
 
 /** Returns true when a Postgres DATABASE_URL is configured and the credit store can be used. */
-export function isPaymentsConfigured(): boolean {
+export function isCreditStoreConfigured(): boolean {
   return !!process.env.DATABASE_URL;
+}
+
+/**
+ * @deprecated Use {@link isCreditStoreConfigured} instead.
+ *
+ * This only checks that the Postgres-backed credit store is configured
+ * (via DATABASE_URL). It does not validate Stripe or any other payments
+ * configuration.
+ */
+export function isPaymentsConfigured(): boolean {
+  return isCreditStoreConfigured();
 }
 
 /** Reset the store (for tests). Clears all rows. */

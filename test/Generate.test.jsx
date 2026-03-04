@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Generate from "../src/Generate.tsx";
 import { pollJob } from "../src/api.js";
+import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
 
 /** Response-like mock: component uses res.text() or res.json() depending on route. */
 function mockRes(body, ok = true, status = ok ? 200 : 400) {
@@ -151,7 +152,7 @@ describe("Generate", () => {
       if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
       if (String(url) === "/api/generate")
         return Promise.resolve(
-          mockRes({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" }, false, 503)
+          mockRes({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED }, false, 503)
         );
       return Promise.reject(new Error("Unmocked: " + url));
     });
