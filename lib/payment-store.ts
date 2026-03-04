@@ -103,6 +103,11 @@ export async function deductCredit(userLogin: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
+/** Returns true when a Postgres DATABASE_URL is configured and the credit store can be used. */
+export function isPaymentsConfigured(): boolean {
+  return !!process.env.DATABASE_URL;
+}
+
 /** Reset the store (for tests). Clears all rows. */
 export async function clearCreditStore(): Promise<void> {
   const db = await getPool();

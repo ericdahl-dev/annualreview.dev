@@ -145,6 +145,32 @@ describe("Generate", () => {
     expect(screen.getByRole("button", { name: /fetch my data/i })).toBeInTheDocument();
   });
 
+  it("shows specific message when API returns 503 PAYMENTS_NOT_CONFIGURED", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate")
+        return Promise.resolve(
+          mockRes({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" }, false, 503)
+        );
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/payments/config"));
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: {
+        value: JSON.stringify({
+          timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+          contributions: [],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/premium generation is not available/i)).toBeInTheDocument();
+    });
+  });
+
   it("premium button hidden when payments not enabled", async () => {
     render(<Generate />);
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/payments/config"));

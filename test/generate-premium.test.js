@@ -38,6 +38,34 @@ function makeOptionsLoggedIn(login, overrides = {}) {
   });
 }
 
+describe("generateRoutes – payments not configured", () => {
+  it("returns 503 with PAYMENTS_NOT_CONFIGURED when wantsPremium but DB is absent", async () => {
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      isPaymentsConfigured: () => false,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatchObject({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 with PAYMENTS_NOT_CONFIGURED when _stripe_session_id sent but DB is absent", async () => {
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_test" }),
+      isPaymentsConfigured: () => false,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toMatchObject({ error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+});
+
 describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   beforeEach(async () => {
     await clearCreditStore();

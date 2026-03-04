@@ -16,7 +16,7 @@ import type { ValidationResult } from "../../lib/validate-evidence.js";
 import type { Evidence } from "../../types/evidence.js";
 import type { PipelineResult } from "../../lib/run-pipeline.js";
 import type { SessionData } from "../../lib/session-store.js";
-import { awardCredits, deductCredit, getCredits } from "../../lib/payment-store.js";
+import { awardCredits, deductCredit, getCredits, isPaymentsConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
 
@@ -37,6 +37,8 @@ export interface GenerateRoutesOptions {
   getSession: (id: string) => SessionData | undefined;
   /** Optional injected Stripe client (for tests). */
   getStripe?: () => Stripe | null;
+  /** Check if payments/DB are configured (injectable for tests). */
+  isPaymentsConfigured?: () => boolean;
 }
 
 type Next = () => void;
@@ -83,6 +85,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
     getSessionIdFromRequest,
     getSession,
     getStripe = defaultGetStripe,
+    isPaymentsConfigured = defaultIsPaymentsConfigured,
   } = options;
 
   return async function generateMiddleware(
@@ -123,6 +126,10 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       let creditsRemaining: number | undefined;
 
       if (wantsPremium) {
+        if (!isPaymentsConfigured()) {
+          respondJson(res, 503, { error: "Premium is not available", code: "PAYMENTS_NOT_CONFIGURED" });
+          return;
+        }
         // Must be logged in — credits are tied to a GitHub account
         const sessId = getSessionIdFromRequest(req);
         const userSession = sessId ? getSession(sessId) : undefined;
