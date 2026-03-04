@@ -484,6 +484,16 @@
   align-items: stretch;
 }
 
+@media (max-width: 480px) {
+  .generate-actions-buttons {
+    flex-direction: column;
+  }
+  .generate-actions-buttons .generate-btn {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
 .generate-models-hint {
   font-size: 0.85rem;
   color: var(--text-muted);
