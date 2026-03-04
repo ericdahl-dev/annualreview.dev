@@ -155,7 +155,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
 
       const jobId = createJob(premium ? "generate-premium" : "generate");
       runInBackground(jobId, async (report) => {
-        await runPipeline(evidence as unknown as Evidence, {
+        return await runPipeline(evidence as unknown as Evidence, {
           premium,
           onProgress: ({ stepIndex, total, label }) =>
             report({ progress: `${stepIndex}/${total} ${label}` }),
