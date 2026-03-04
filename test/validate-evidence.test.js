@@ -59,4 +59,68 @@ describe("validateEvidence", () => {
     });
     expect(result.valid).toBe(false);
   });
+
+  it("rejects invalid timeframe.start_date format", () => {
+    const result = validateEvidence({
+      timeframe: { start_date: "not-a-date", end_date: "2025-12-31" },
+      contributions: [],
+    });
+    expect(result.valid).toBe(false);
+    expect("errors" in result && result.errors.some((e) => e.instancePath.includes("start_date"))).toBe(true);
+  });
+
+  it("rejects invalid timeframe.end_date format", () => {
+    const result = validateEvidence({
+      timeframe: { start_date: "2025-01-01", end_date: "2025/12/31" },
+      contributions: [],
+    });
+    expect(result.valid).toBe(false);
+    expect("errors" in result && result.errors.some((e) => e.instancePath.includes("end_date"))).toBe(true);
+  });
+
+  it("rejects invalid url format", () => {
+    const result = validateEvidence({
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [
+        { id: "r#1", type: "pull_request", title: "x", url: "not-a-uri", repo: "a/b" },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect("errors" in result && result.errors.some((e) => e.instancePath.includes("url"))).toBe(true);
+  });
+
+  it("rejects invalid merged_at format", () => {
+    const result = validateEvidence({
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [
+        {
+          id: "r#1",
+          type: "pull_request",
+          title: "x",
+          url: "https://github.com/a/b/pull/1",
+          repo: "a/b",
+          merged_at: "not-a-datetime",
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect("errors" in result && result.errors.some((e) => e.instancePath.includes("merged_at"))).toBe(true);
+  });
+
+  it("accepts valid merged_at with timezone", () => {
+    const result = validateEvidence({
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [
+        {
+          id: "r#1",
+          type: "pull_request",
+          title: "x",
+          url: "https://github.com/a/b/pull/1",
+          repo: "a/b",
+          merged_at: "2025-01-15T14:30:00Z",
+        },
+      ],
+    });
+    expect(result.valid).toBe(true);
+  });
 });
