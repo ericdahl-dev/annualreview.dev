@@ -310,7 +310,17 @@ export async function runPipeline(
       ],
       ...posthogOpts,
     });
-    const stepResult = extractJson(completion.choices[0]?.message?.content ?? "{}");
+    const rawContent = completion.choices[0]?.message?.content;
+    if (rawContent == null || (typeof rawContent === "string" && rawContent.trim() === "")) {
+      throw new Error(`Pipeline step "${step.key}" returned no content`);
+    }
+    let stepResult: unknown;
+    try {
+      stepResult = extractJson(rawContent);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Step ${step.key} returned invalid JSON: ${msg}`);
+    }
     previousResults[step.key] = stepResult;
     prevStepMs = Date.now() - stepStart;
     prevStepPayloadTokens = estimateTokens(input);
