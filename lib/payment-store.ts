@@ -71,15 +71,10 @@ export async function awardCredits(
   );
   if (insertEvent.rowCount === 0) return; // already processed — idempotent
 
-  const currentRow = await db.query<{ remaining: number }>(
-    "SELECT remaining FROM credits WHERE user_login = $1",
-    [userLogin]
-  );
-  const current = currentRow.rows[0]?.remaining ?? 0;
   await db.query(
     `INSERT INTO credits (user_login, remaining) VALUES ($1, $2)
-     ON CONFLICT (user_login) DO UPDATE SET remaining = EXCLUDED.remaining`,
-    [userLogin, current + count]
+     ON CONFLICT (user_login) DO UPDATE SET remaining = credits.remaining + $2`,
+    [userLogin, count]
   );
 }
 
