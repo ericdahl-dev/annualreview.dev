@@ -14,7 +14,7 @@ export default defineConfig({
         "**/*.config.ts",
         "test/**",
       ],
-      reporter: ["text", "text-summary"],
+      reporter: ["text", "text-summary", "html"],
     },
   },
 });
