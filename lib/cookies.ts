@@ -9,12 +9,12 @@ export function signSessionId(id: string, secret: string): string {
 
 export function verifySessionId(value: string, secret: string): string | null {
   if (!value || typeof value !== "string") return null;
-  const i = value.lastIndexOf(".");
-  if (i <= 0) return null;
-  const id = value.slice(0, i);
-  const sig = value.slice(i + 1);
+  const lastDotIndex = value.lastIndexOf(".");
+  if (lastDotIndex <= 0) return null;
+  const id = value.slice(0, lastDotIndex);
+  const signature = value.slice(lastDotIndex + 1);
   const expected = createHmac("sha256", secret).update(id).digest("hex");
-  return sig === expected ? id : null;
+  return signature === expected ? id : null;
 }
 
 export function getSessionIdFromRequest(
@@ -100,16 +100,16 @@ export function getStateFromRequest(
     return null;
   }
   const raw = decodeURIComponent(match[1].trim());
-  const i = raw.lastIndexOf(".");
-  if (i <= 0) {
+  const lastDotIndex = raw.lastIndexOf(".");
+  if (lastDotIndex <= 0) {
     log("state_cookie", "bad_format");
     return null;
   }
-  const state = raw.slice(0, i);
-  const sig = raw.slice(i + 1);
+  const state = raw.slice(0, lastDotIndex);
+  const signature = raw.slice(lastDotIndex + 1);
   const secretTrimmed = String(secret).trim();
   const expected = createHmac("sha256", secretTrimmed).update(state).digest("hex");
-  if (sig !== expected) {
+  if (signature !== expected) {
     log("state_cookie", "verify_failed");
     return null;
   }

@@ -92,7 +92,7 @@ interface GenerateMarkdownOptions {
 
 function evidenceLinks(evidence: EvidenceRef[] = []): string {
   if (!evidence.length) return "";
-  return evidence.map((e) => `[${e.id || e.title || "ref"}](${e.url})`).join(", ");
+  return evidence.map((ref) => `[${ref.id || ref.title || "ref"}](${ref.url})`).join(", ");
 }
 
 export function generateMarkdown(
@@ -120,14 +120,14 @@ export function generateMarkdown(
   const themeList = themes?.themes ?? [];
   if (themeList.length) {
     lines.push("---", "", "## Themes", "");
-    themeList.forEach((t, i) => {
-      lines.push(`### ${i + 1}. ${t.theme_name}`);
-      if (t.one_liner) lines.push("", `> ${t.one_liner}`);
-      if (t.why_it_matters) lines.push("", `**Why it matters:** ${t.why_it_matters}`);
-      if (t.confidence) lines.push("", `*Confidence: ${t.confidence}*`);
-      if (t.notes_or_assumptions) lines.push("", `*Notes: ${t.notes_or_assumptions}*`);
-      if (t.anchor_evidence?.length) {
-        lines.push("", `*Evidence: ${t.anchor_evidence.map((e) => `[${e.title || e.id}](${e.url})`).join(", ")}*`);
+    themeList.forEach((theme, i) => {
+      lines.push(`### ${i + 1}. ${theme.theme_name}`);
+      if (theme.one_liner) lines.push("", `> ${theme.one_liner}`);
+      if (theme.why_it_matters) lines.push("", `**Why it matters:** ${theme.why_it_matters}`);
+      if (theme.confidence) lines.push("", `*Confidence: ${theme.confidence}*`);
+      if (theme.notes_or_assumptions) lines.push("", `*Notes: ${theme.notes_or_assumptions}*`);
+      if (theme.anchor_evidence?.length) {
+        lines.push("", `*Evidence: ${theme.anchor_evidence.map((ref) => `[${ref.title || ref.id}](${ref.url})`).join(", ")}*`);
       }
       lines.push("");
     });
@@ -140,20 +140,20 @@ export function generateMarkdown(
     lines.push("---", "", "## Impact Bullets", "");
     if (top10.length) {
       lines.push("### Top 10 Bullets", "");
-      top10.forEach((b) => {
-        const refs = b.evidence?.length ? ` (${evidenceLinks(b.evidence)})` : "";
-        lines.push(`- ${b.text}${refs}`);
+      top10.forEach((bullet) => {
+        const refs = bullet.evidence?.length ? ` (${evidenceLinks(bullet.evidence)})` : "";
+        lines.push(`- ${bullet.text}${refs}`);
       });
       lines.push("");
     }
     if (byTheme.length) {
-      const themeNameMap = Object.fromEntries(themeList.map((t) => [t.theme_id, t.theme_name]));
-      byTheme.forEach((bt) => {
-        const name = themeNameMap[bt.theme_id ?? ""] || bt.theme_id;
+      const themeNameMap = Object.fromEntries(themeList.map((theme) => [theme.theme_id, theme.theme_name]));
+      byTheme.forEach((bulletGroup) => {
+        const name = themeNameMap[bulletGroup.theme_id ?? ""] || bulletGroup.theme_id;
         lines.push(`### ${name}`, "");
-        (bt.bullets ?? []).forEach((b) => {
-          const refs = b.evidence?.length ? ` (${evidenceLinks(b.evidence)})` : "";
-          lines.push(`- ${b.text}${refs}`);
+        (bulletGroup.bullets ?? []).forEach((bullet) => {
+          const refs = bullet.evidence?.length ? ` (${evidenceLinks(bullet.evidence)})` : "";
+          lines.push(`- ${bullet.text}${refs}`);
         });
         lines.push("");
       });
@@ -164,22 +164,22 @@ export function generateMarkdown(
   const storyList = stories?.stories ?? [];
   if (storyList.length) {
     lines.push("---", "", "## STAR Stories", "");
-    storyList.forEach((s) => {
-      lines.push(`### ${s.title}`);
-      if (s.situation) lines.push("", `**Situation:** ${s.situation}`);
-      if (s.task) lines.push("", `**Task:** ${s.task}`);
-      if (s.actions?.length) {
+    storyList.forEach((story) => {
+      lines.push(`### ${story.title}`);
+      if (story.situation) lines.push("", `**Situation:** ${story.situation}`);
+      if (story.task) lines.push("", `**Task:** ${story.task}`);
+      if (story.actions?.length) {
         lines.push("", "**Actions:**");
-        s.actions.forEach((a) => lines.push(`- ${a}`));
+        story.actions.forEach((action) => lines.push(`- ${action}`));
       }
-      if (s.results?.length) {
+      if (story.results?.length) {
         lines.push("", "**Results:**");
-        s.results.forEach((r) => lines.push(`- ${r}`));
+        story.results.forEach((result) => lines.push(`- ${result}`));
       }
-      if (s.evidence?.length) {
-        lines.push("", `*Evidence: ${s.evidence.map((e) => `[${e.title || e.id}](${e.url})`).join(", ")}*`);
+      if (story.evidence?.length) {
+        lines.push("", `*Evidence: ${story.evidence.map((ref) => `[${ref.title || ref.id}](${ref.url})`).join(", ")}*`);
       }
-      if (s.confidence) lines.push("", `*Confidence: ${s.confidence}*`);
+      if (story.confidence) lines.push("", `*Confidence: ${story.confidence}*`);
       lines.push("");
     });
   }
@@ -224,16 +224,16 @@ export function generateMarkdown(
 
     if (sections.performance_dimensions?.length) {
       lines.push("### Performance Dimensions", "");
-      sections.performance_dimensions.forEach((dim) => {
-        const heading = dim.name || dim.id;
+      sections.performance_dimensions.forEach((dimension) => {
+        const heading = dimension.name || dimension.id;
         if (heading) {
           lines.push(`#### ${heading}`, "");
         }
-        if (dim.text) {
-          lines.push(dim.text);
+        if (dimension.text) {
+          lines.push(dimension.text);
         }
-        if (dim.evidence?.length) {
-          lines.push("", `*Sources: ${evidenceLinks(dim.evidence)}*`);
+        if (dimension.evidence?.length) {
+          lines.push("", `*Sources: ${evidenceLinks(dimension.evidence)}*`);
         }
         lines.push("");
       });
@@ -241,9 +241,9 @@ export function generateMarkdown(
 
     if (sections.next_year_goals?.length) {
       lines.push("### Next Year Goals", "");
-      sections.next_year_goals.forEach((g) => {
-        const refs = g.evidence?.length ? ` (${evidenceLinks(g.evidence)})` : "";
-        lines.push(`- ${g.text}${refs}`);
+      sections.next_year_goals.forEach((goal) => {
+        const refs = goal.evidence?.length ? ` (${evidenceLinks(goal.evidence)})` : "";
+        lines.push(`- ${goal.text}${refs}`);
       });
       lines.push("");
     }
@@ -255,36 +255,36 @@ export function generateMarkdown(
   const allEvidence: EvidenceRef[] = [];
 
   function addEvidence(ev: EvidenceRef[] | undefined = []) {
-    for (const e of ev) {
-      const key = e.url || e.id;
+    for (const ref of ev) {
+      const key = ref.url || ref.id;
       if (key && !seen.has(key)) {
         seen.add(key);
-        allEvidence.push(e);
+        allEvidence.push(ref);
       }
     }
   }
 
   if (summary?.evidence) addEvidence(summary.evidence);
-  themeList.forEach((t) => addEvidence(t.anchor_evidence));
-  top10.forEach((b) => addEvidence(b.evidence));
-  byTheme.forEach((bt) => (bt.bullets ?? []).forEach((b) => addEvidence(b.evidence)));
-  storyList.forEach((s) => addEvidence(s.evidence));
-  if (sections.key_accomplishments) sections.key_accomplishments.forEach((i) => addEvidence(i.evidence));
+  themeList.forEach((theme) => addEvidence(theme.anchor_evidence));
+  top10.forEach((bullet) => addEvidence(bullet.evidence));
+  byTheme.forEach((bulletGroup) => (bulletGroup.bullets ?? []).forEach((bullet) => addEvidence(bullet.evidence)));
+  storyList.forEach((story) => addEvidence(story.evidence));
+  if (sections.key_accomplishments) sections.key_accomplishments.forEach((item) => addEvidence(item.evidence));
   if (sections.how_i_worked) addEvidence(sections.how_i_worked.evidence);
   if (sections.growth) addEvidence(sections.growth.evidence);
-  if (sections.next_year_goals) sections.next_year_goals.forEach((i) => addEvidence(i.evidence));
+  if (sections.next_year_goals) sections.next_year_goals.forEach((goal) => addEvidence(goal.evidence));
   if (sections.performance_dimensions) {
-    sections.performance_dimensions.forEach((d) => addEvidence(d.evidence));
+    sections.performance_dimensions.forEach((dimension) => addEvidence(dimension.evidence));
   }
 
   if (allEvidence.length) {
     lines.push("---", "", "## Evidence Appendix", "");
     lines.push("| ID | Title | URL |");
     lines.push("|----|-------|-----|");
-    allEvidence.forEach((e) => {
-      const id = e.id || "";
-      const title = (e.title || "").replace(/\|/g, "\\|");
-      const url = e.url || "";
+    allEvidence.forEach((ref) => {
+      const id = ref.id || "";
+      const title = (ref.title || "").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+      const url = ref.url || "";
       lines.push(`| ${id} | ${title} | ${url} |`);
     });
     lines.push("");

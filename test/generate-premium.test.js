@@ -1,25 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateRoutes } from "../server/routes/generate.ts";
 import { clearCreditStore, awardCredits, getCredits } from "../lib/payment-store.ts";
+import { mockRes, respondJson } from "./helpers.js";
 
 const hasDb = !!process.env.DATABASE_URL;
-
-function respondJson(res, status, data) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(data));
-}
-
-function mockRes() {
-  return {
-    statusCode: 200,
-    headers: {},
-    setHeader(k, v) { this.headers[k] = v; },
-    end(data) { this._body = data; },
-    _body: null,
-    get body() { return JSON.parse(this._body || "{}"); },
-  };
-}
 
 const validEvidence = {
   timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },

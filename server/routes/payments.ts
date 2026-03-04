@@ -14,6 +14,7 @@ import { PostHog } from "posthog-node";
 import Stripe from "stripe";
 import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/run-pipeline.js";
+import { STRIPE_API_VERSION } from "../config.js";
 
 const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
 
@@ -36,8 +37,6 @@ function readRawBody(req: IncomingMessage): Promise<Buffer> {
     req.on("error", reject);
   });
 }
-
-const STRIPE_API_VERSION = "2026-02-25.clover" as const;
 
 function getStripeClient(): Stripe | null {
   const key = process.env.STRIPE_SECRET_KEY;

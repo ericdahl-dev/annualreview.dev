@@ -80,6 +80,8 @@ function apiRoutesPlugin() {
       const clientId = env.GITHUB_CLIENT_ID || process.env.GITHUB_CLIENT_ID;
       const clientSecret =
         env.GITHUB_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+      const getSessionId = (r: { headers?: { cookie?: string } }) =>
+        getSessionIdFromRequest(r, sessionSecret);
 
       function getRequestContext(req: { headers: Record<string, string | string[] | undefined> }) {
         const isSecure = req.headers["x-forwarded-proto"] === "https";
@@ -101,8 +103,7 @@ function apiRoutesPlugin() {
           clientId,
           clientSecret,
           getRequestContext,
-          getSessionIdFromRequest: (r) =>
-            getSessionIdFromRequest(r, sessionSecret),
+          getSessionIdFromRequest: getSessionId,
           getSession,
           destroySession,
           setSessionCookie,
@@ -131,8 +132,7 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/jobs",
         jobsRoutes({
-          getSessionIdFromRequest: (r) =>
-            getSessionIdFromRequest(r, sessionSecret),
+          getSessionIdFromRequest: getSessionId,
           getLatestJob,
           getJob,
           respondJson,
@@ -148,8 +148,7 @@ function apiRoutesPlugin() {
           createJob,
           runInBackground,
           runPipeline,
-          getSessionIdFromRequest: (r) =>
-            getSessionIdFromRequest(r, sessionSecret),
+          getSessionIdFromRequest: getSessionId,
           getSession,
         })
       );
@@ -160,8 +159,7 @@ function apiRoutesPlugin() {
           readJsonBody,
           respondJson,
           DATE_YYYY_MM_DD,
-          getSessionIdFromRequest: (r) =>
-            getSessionIdFromRequest(r, sessionSecret),
+          getSessionIdFromRequest: getSessionId,
           getSession,
           createJob,
           runInBackground,
@@ -173,8 +171,7 @@ function apiRoutesPlugin() {
         "/api/payments",
         paymentsRoutes({
           respondJson,
-          getSessionIdFromRequest: (r) =>
-            getSessionIdFromRequest(r, sessionSecret),
+          getSessionIdFromRequest: getSessionId,
           getSession,
         })
       );

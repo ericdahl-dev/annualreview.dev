@@ -51,26 +51,26 @@ export function slimContributions(
 ): Record<string, unknown>[] {
   const { bodyChars = 400, summaryChars = 500, minimal = false } = opts;
   const keys = minimal ? MINIMAL_KEYS : SLIM_KEYS;
-  return contributions.map((c) => {
-    const out: Record<string, unknown> = {};
-    for (const k of keys) {
-      if (c[k] === undefined) continue;
-      if (k === "labels") out[k] = capArray(c[k] as string[], MAX_LABELS);
-      else if (k === "linked_issues") out[k] = capArray(c[k] as string[], MAX_LINKED_ISSUES);
-      else out[k] = c[k];
+  return contributions.map((contribution) => {
+    const slimmed: Record<string, unknown> = {};
+    for (const fieldKey of keys) {
+      if (contribution[fieldKey] === undefined) continue;
+      if (fieldKey === "labels") slimmed[fieldKey] = capArray(contribution[fieldKey] as string[], MAX_LABELS);
+      else if (fieldKey === "linked_issues") slimmed[fieldKey] = capArray(contribution[fieldKey] as string[], MAX_LINKED_ISSUES);
+      else slimmed[fieldKey] = contribution[fieldKey];
     }
     const sumLen = minimal ? 200 : summaryChars;
-    if (c.summary != null) {
-      out.summary =
-        typeof c.summary === "string" && c.summary.length > sumLen
-          ? c.summary.slice(0, sumLen) + "..."
-          : c.summary;
+    if (contribution.summary != null) {
+      slimmed.summary =
+        typeof contribution.summary === "string" && contribution.summary.length > sumLen
+          ? contribution.summary.slice(0, sumLen) + "..."
+          : contribution.summary;
     }
-    if (!minimal && c.body != null && typeof c.body === "string" && bodyChars > 0) {
-      out.body_preview =
-        c.body.length > bodyChars ? c.body.slice(0, bodyChars) + "..." : c.body;
+    if (!minimal && contribution.body != null && typeof contribution.body === "string" && bodyChars > 0) {
+      slimmed.body_preview =
+        contribution.body.length > bodyChars ? contribution.body.slice(0, bodyChars) + "..." : contribution.body;
     }
-    return out;
+    return slimmed;
   });
 }
 

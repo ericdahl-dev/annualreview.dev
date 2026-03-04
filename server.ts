@@ -110,7 +110,7 @@ function handleRequest(
   res: ServerResponse,
 ): void {
   const url = req.url || "/";
-  const [pathname, qs] = url.split("?");
+  const [pathname, queryString] = url.split("?");
   const path = pathname.replace(/^\/+/, "");
 
   const sessionSecret = process.env.SESSION_SECRET || "dev-secret";
@@ -123,12 +123,13 @@ function handleRequest(
   const cookieOpts = { secure: isSecure };
   const log = (event: string, detail?: string): void =>
     console.error("[auth] " + event + (detail ? " " + detail : ""));
+  const getSessionId = (r: IncomingMessage) => getSessionIdFromRequest(r, sessionSecret);
 
   if (path.startsWith("api/")) {
-    const sub = path.slice(4);
-    const [area, ...rest] = sub.split("/");
-    const restPath = rest.join("/");
-    const pathAndQs = restPath + (qs ? "?" + qs : "");
+    const apiPath = path.slice(4);
+    const [routeArea, ...remainingSegments] = apiPath.split("/");
+    const subroutePath = remainingSegments.join("/");
+    const pathAndQs = subroutePath + (queryString ? "?" + queryString : "");
     const wrappedReq = Object.assign(Object.create(req), {
       url: pathAndQs ? "/" + pathAndQs : "/",
     });
@@ -137,7 +138,7 @@ function handleRequest(
       serveStatic(res, pathname);
     };
 
-    if (area === "auth") {
+    if (routeArea === "auth") {
       authRoutes({
         sessionSecret,
         clientId,
@@ -148,7 +149,7 @@ function handleRequest(
           cookieOpts,
           basePath: "/api/auth",
         }),
-        getSessionIdFromRequest: (r) => getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
         destroySession,
         setSessionCookie,
@@ -174,10 +175,9 @@ function handleRequest(
       return;
     }
 
-    if (area === "jobs") {
+    if (routeArea === "jobs") {
       jobsRoutes({
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getLatestJob,
         getJob,
         respondJson,
@@ -185,7 +185,7 @@ function handleRequest(
       return;
     }
 
-    if (area === "generate") {
+    if (routeArea === "generate") {
       generateRoutes({
         readJsonBody,
         respondJson,
@@ -193,30 +193,27 @@ function handleRequest(
         createJob,
         runInBackground,
         runPipeline,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
       return;
     }
 
-    if (area === "payments") {
+    if (routeArea === "payments") {
       paymentsRoutes({
         respondJson,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
       return;
     }
 
-    if (area === "collect") {
+    if (routeArea === "collect") {
       collectRoutes({
         readJsonBody,
         respondJson,
         DATE_YYYY_MM_DD,
-        getSessionIdFromRequest: (r) =>
-          getSessionIdFromRequest(r, sessionSecret),
+        getSessionIdFromRequest: getSessionId,
         getSession,
         createJob,
         runInBackground,

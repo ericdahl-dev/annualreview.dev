@@ -1,41 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getCreditsPerPurchase } from "../lib/payment-store.ts";
 import { paymentsRoutes } from "../server/routes/payments.ts";
-
-function mockRes(status = 200) {
-  const chunks = [];
-  return {
-    statusCode: status,
-    headers: {},
-    setHeader(k, v) { this.headers[k] = v; },
-    end(data) { this._body = data; },
-    _body: null,
-    get body() { return JSON.parse(this._body || "{}"); },
-  };
-}
-
-function mockReq(method, url, body = {}, headers = {}) {
-  const buf = Buffer.from(JSON.stringify(body));
-  const r = {
-    method,
-    url,
-    headers: { "content-type": "application/json", "host": "localhost:3000", ...headers },
-    _buf: buf,
-    _pos: 0,
-    on(event, handler) {
-      if (event === "data") setTimeout(() => handler(buf), 0);
-      if (event === "end") setTimeout(() => handler(), 0);
-      return this;
-    },
-  };
-  return r;
-}
-
-function respondJson(res, status, data) {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(data));
-}
+import { mockRes, mockReq, respondJson } from "./helpers.js";
 
 function makeRouteOptions(overrides = {}) {
   return {
