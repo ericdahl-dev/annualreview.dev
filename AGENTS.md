@@ -72,7 +72,6 @@ Turn GitHub contribution evidence into an evidence-backed annual review draft: t
 See `package.json` scripts and the Development section in `README.md`. Summary: `yarn test` (Vitest), `yarn typecheck` (tsc --noEmit), `yarn build` (Vite production build), `yarn dev` (Vite dev server).
 
 ### Gotchas
-- `yarn typecheck` has pre-existing TS errors in `lib/run-pipeline.ts`, `server/routes/collect.ts`, and `server/routes/generate.ts`. These are known and do not block tests or builds.
 - Payment/premium tests (`test/payments.test.js`, `test/generate-premium.test.js`) auto-skip when `DATABASE_URL` is not set — this is expected in environments without Postgres.
 - The full generation pipeline requires `OPENROUTER_API_KEY`. Without it the app loads and accepts input, but cannot generate reviews.
 - `yarn dev` starts only the Vite frontend dev server (no API routes). To test API routes locally, run `yarn start` after `yarn build`.
