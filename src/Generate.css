@@ -510,6 +510,19 @@
   background: #6d28d9;
 }
 
+.generate-btn-inner {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.generate-btn-model {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
 .generate-btn-credits {
   font-size: 0.75rem;
   font-weight: 500;
