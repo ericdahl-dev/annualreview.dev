@@ -144,6 +144,125 @@ describe("collectRawGraphQL", () => {
     expect(result.reviews).toHaveLength(0);
   });
 
+  it("throws when viewer login is empty", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { viewer: {} } }),
+      text: () => Promise.resolve(""),
+    });
+    await expect(
+      collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch })
+    ).rejects.toThrow(/viewer login/i);
+  });
+
+  it("throws on GraphQL errors", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { viewer: { login: "u" } } }),
+        text: () => Promise.resolve(""),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ errors: [{ message: "rate limited" }] }),
+        text: () => Promise.resolve(""),
+      });
+    await expect(
+      collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch })
+    ).rejects.toThrow("rate limited");
+  });
+
+  it("throws on HTTP error from GitHub", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: () => Promise.resolve("Bad credentials"),
+    });
+    await expect(
+      collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch })
+    ).rejects.toThrow(/401/);
+  });
+
+  it("throws when search returns no search data", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { viewer: { login: "u" } } }),
+        text: () => Promise.resolve(""),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: {} }),
+        text: () => Promise.resolve(""),
+      });
+    await expect(
+      collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch })
+    ).rejects.toThrow(/no search/i);
+  });
+
+  it("skips non-PullRequest nodes", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, opts) => {
+      const body = JSON.parse(opts?.body ?? "{}");
+      if (body.query.includes("viewer")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { viewer: { login: "u" } } }), text: () => Promise.resolve("") });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            search: {
+              edges: [{ node: { __typename: "Issue", number: 1 } }],
+              pageInfo: { endCursor: null, hasNextPage: false },
+            },
+          },
+        }),
+        text: () => Promise.resolve(""),
+      });
+    });
+    const result = await collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch });
+    expect(result.pull_requests).toHaveLength(0);
+  });
+
+  it("paginates when hasNextPage is true", async () => {
+    let callCount = 0;
+    const mockFetch = vi.fn().mockImplementation((url, opts) => {
+      const body = JSON.parse(opts?.body ?? "{}");
+      if (body.query.includes("viewer")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { viewer: { login: "u" } } }), text: () => Promise.resolve("") });
+      }
+      callCount++;
+      const isFirst = callCount === 1;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            search: {
+              edges: [{
+                node: {
+                  __typename: "PullRequest",
+                  number: callCount,
+                  title: `PR${callCount}`,
+                  body: "",
+                  url: "https://x",
+                  mergedAt: null,
+                  additions: 0, deletions: 0, changedFiles: 0,
+                  baseRepository: { nameWithOwner: "a/b" },
+                  labels: { nodes: [] },
+                  reviewThreads: { totalCount: 0 },
+                  reviews: { nodes: [] },
+                },
+              }],
+              pageInfo: { endCursor: isFirst ? "cursor1" : null, hasNextPage: isFirst },
+            },
+          },
+        }),
+        text: () => Promise.resolve(""),
+      });
+    });
+    const result = await collectRawGraphQL({ start: "2025-01-01", end: "2025-12-31", token: "x", fetchFn: mockFetch });
+    expect(result.pull_requests).toHaveLength(2);
+  });
+
   it("normalize(collectRawGraphQL(...)) produces contributions", async () => {
     const mockFetch = vi.fn().mockImplementation((url, opts) => {
       const body = JSON.parse(opts?.body ?? "{}");

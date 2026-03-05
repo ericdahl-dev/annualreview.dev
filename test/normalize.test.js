@@ -85,6 +85,173 @@ describe("normalize", () => {
     expect(evidence.contributions[0].type).toBe("issue");
     expect(evidence.contributions[0].id).toBe("org/r#deadbee");
   });
+
+  it("normalizes reviews with repository and pull_number", () => {
+    const raw = {
+      reviews: [
+        { id: "r1", body: "Nice", state: "APPROVED", submitted_at: "2025-06-01T00:00:00Z", html_url: "https://r", repository: { full_name: "org/r" }, pull_number: 10 },
+      ],
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions).toHaveLength(1);
+    expect(ev.contributions[0].type).toBe("review");
+    expect(ev.contributions[0].repo).toBe("org/r");
+    expect(ev.contributions[0].approvals_count).toBe(1);
+  });
+
+  it("normalizes reviews with pull_request_url fallback", () => {
+    const raw = {
+      reviews: [{ id: "r2", body: "", state: "CHANGES_REQUESTED", submitted_at: "2025-06-01T00:00:00Z", url: "https://r", pull_request_url: "https://api.github.com/repos/org/r/pulls/55" }],
+      repo: "org/r",
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].id).toContain("55");
+    expect(ev.contributions[0].approvals_count).toBe(0);
+  });
+
+  it("filters reviews by date range", () => {
+    const raw = {
+      reviews: [
+        { id: "r3", state: "APPROVED", submitted_at: "2024-01-01T00:00:00Z", url: "", pull_number: 1 },
+        { id: "r4", state: "APPROVED", submitted_at: "2025-06-01T00:00:00Z", url: "", pull_number: 2 },
+      ],
+      repo: "org/r",
+    };
+    const ev = normalize(raw, "2025-01-01", "2025-12-31");
+    expect(ev.contributions).toHaveLength(1);
+  });
+
+  it("normalizes releases", () => {
+    const raw = {
+      releases: [
+        { id: "rel1", tag_name: "v1.0", name: "Release 1.0", body: "Changes", html_url: "https://r", published_at: "2025-06-01T00:00:00Z", target_commitish: "main" },
+      ],
+      repo: "org/r",
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions).toHaveLength(1);
+    expect(ev.contributions[0].type).toBe("release");
+    expect(ev.contributions[0].title).toBe("Release 1.0");
+  });
+
+  it("normalizes release with repository fallback (no target_commitish)", () => {
+    const raw = {
+      releases: [{ id: "rel2", tag_name: "v2.0", html_url: "https://r", created_at: "2025-06-01", repository: { full_name: "org/r" } }],
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].repo).toBe("org/r");
+  });
+
+  it("filters releases by date range", () => {
+    const raw = {
+      releases: [
+        { id: "old", published_at: "2024-01-01T00:00:00Z" },
+        { id: "new", published_at: "2025-06-01T00:00:00Z" },
+      ],
+      repo: "org/r",
+    };
+    const ev = normalize(raw, "2025-01-01", "2025-12-31");
+    expect(ev.contributions).toHaveLength(1);
+  });
+
+  it("filters commits by date range", () => {
+    const raw = {
+      commits: [
+        { sha: "aaa", commit: { author: { date: "2024-01-01" }, message: "old" } },
+        { sha: "bbb", commit: { author: { date: "2025-06-01" }, message: "new" } },
+      ],
+      repo: "org/r",
+    };
+    const ev = normalize(raw, "2025-01-01", "2025-12-31");
+    expect(ev.contributions).toHaveLength(1);
+    expect(ev.contributions[0].title).toBe("new");
+  });
+
+  it("uses created_at or updated_at for PR date when merged_at is null", () => {
+    const raw = {
+      pull_requests: [
+        { number: 1, merged_at: null, created_at: "2025-06-15T00:00:00Z", base: { repo: { full_name: "org/r" } }, title: "Open PR", html_url: "https://x", labels: [] },
+      ],
+    };
+    const ev = normalize(raw, "2025-06-01", "2025-12-31");
+    expect(ev.contributions).toHaveLength(1);
+  });
+
+  it("falls back to head repo for PR when base is missing", () => {
+    const raw = {
+      pull_requests: [
+        { number: 1, head: { repo: { full_name: "fork/r" } }, title: "Fork PR", html_url: "https://x", labels: [], merged_at: null },
+      ],
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].repo).toBe("fork/r");
+  });
+
+  it("falls back to raw.repo when PR has no base or head", () => {
+    const raw = {
+      repo: "default/repo",
+      pull_requests: [{ number: 1, title: "PR", html_url: "https://x", labels: [], merged_at: null }],
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].repo).toBe("default/repo");
+  });
+
+  it("handles string labels in PR", () => {
+    const raw = {
+      pull_requests: [
+        { number: 1, labels: ["bug", "fix"], base: { repo: { full_name: "a/b" } }, title: "T", html_url: "https://x", merged_at: null },
+      ],
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].labels).toEqual(["bug", "fix"]);
+  });
+
+  it("uses raw.timeframe for defaults", () => {
+    const raw = { timeframe: { start_date: "2024-01-01", end_date: "2024-12-31" } };
+    const ev = normalize(raw, null, null);
+    expect(ev.timeframe).toEqual({ start_date: "2024-01-01", end_date: "2024-12-31" });
+  });
+
+  it("uses pulls alias for pull_requests", () => {
+    const raw = { pulls: [{ number: 5, title: "P", html_url: "https://x", labels: [], base: { repo: { full_name: "a/b" } }, merged_at: null }] };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions).toHaveLength(1);
+  });
+
+  it("uses pull_requests_list alias", () => {
+    const raw = { pull_requests_list: [{ number: 6, title: "P2", html_url: "https://x", labels: [], base: { repo: { full_name: "a/b" } }, merged_at: null }] };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions).toHaveLength(1);
+  });
+
+  it("inRange returns false for invalid date", () => {
+    const raw = {
+      pull_requests: [{ number: 1, merged_at: "not-a-date", base: { repo: { full_name: "a/b" } }, title: "T", html_url: "https://x", labels: [] }],
+    };
+    const ev = normalize(raw, "2025-01-01", "2025-12-31");
+    expect(ev.contributions).toHaveLength(0);
+  });
+
+  it("commit uses committer date as fallback", () => {
+    const raw = {
+      commits: [{ sha: "ccc", commit: { committer: { date: "2025-06-01" }, message: "msg" } }],
+      repo: "o/r",
+    };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].merged_at).toBe("2025-06-01");
+  });
+
+  it("contributionId with empty repo", () => {
+    const raw = { commits: [{ sha: "ddd", commit: { message: "m" } }] };
+    const ev = normalize(raw, null, null);
+    expect(ev.contributions[0].id).toBe("#ddd");
+  });
+
+  it("preserves role_context_optional", () => {
+    const raw = { role_context_optional: { level: "senior" } };
+    const ev = normalize(raw, null, null);
+    expect(ev.role_context_optional).toEqual({ level: "senior" });
+  });
 });
 
 describe("normalize CLI", () => {

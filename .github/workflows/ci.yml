@@ -23,6 +23,8 @@ jobs:
 
       - name: Test
         run: yarn test:coverage
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
