@@ -16,6 +16,7 @@ dist/
 
 # Frontend / Node
 coverage/
+test-report.junit.xml
 .vite/
 .turbo/
 .eslintcache
