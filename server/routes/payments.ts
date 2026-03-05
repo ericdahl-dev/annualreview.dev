@@ -115,7 +115,6 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
 
         const session = await stripe.checkout.sessions.create({
           mode: "payment",
-          payment_method_types: ["card"],
           metadata: { user_login: userLogin },
           line_items: [
             {
@@ -163,8 +162,8 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           const session = event.data.object as Stripe.Checkout.Session;
           // Award credits to the GitHub user who initiated the checkout.
           // user_login is stored in metadata when creating the checkout session.
-          // payment_method_types is restricted to 'card' so payment_status will
-          // always be 'paid' here, but the check is kept for defense-in-depth.
+          // payment_status is checked for defense-in-depth (async payment methods
+          // may complete the session before the payment is confirmed).
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
             await awardCreditsFn(userLogin, session.id);
@@ -172,6 +171,9 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           } else {
             console.log("[payments] checkout.session.completed skipped: payment_status =", session.payment_status);
           }
+        } else if (event.type === "checkout.session.expired") {
+          const session = event.data.object as Stripe.Checkout.Session;
+          console.log("[payments] checkout.session.expired: session_id =", session.id, "user_login =", session.metadata?.user_login);
         }
         respondJson(res, 200, { received: true });
       } catch (e) {
