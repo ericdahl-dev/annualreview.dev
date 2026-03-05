@@ -56,6 +56,7 @@ import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
+import { shutdownPostHogLogs } from "./lib/posthog-logs.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
 import { getSessionSecret } from "./server/session-secret.ts";
 
@@ -230,4 +231,17 @@ createServer(handleRequest).listen(port, () => {
     body: `Server listening on port ${port}`,
     attributes: { port },
   });
+});
+
+let shuttingDown = false;
+process.on("SIGTERM", () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const timeout = setTimeout(() => process.exit(1), 10_000);
+  shutdownPostHogLogs()
+    .catch(() => {})
+    .finally(() => {
+      clearTimeout(timeout);
+      process.exit(0);
+    });
 });
