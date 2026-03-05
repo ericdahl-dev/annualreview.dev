@@ -1,0 +1,4 @@
+# Codecov: focus on app + server + lib; CLI scripts are tested indirectly.
+# Remove ignore below to include scripts/ in the reported percentage.
+ignore:
+  - "scripts/**"
