@@ -77,7 +77,7 @@ describe("collectRoutes – POST /", () => {
     expect(opts.createJob).toHaveBeenCalledWith("collect", "sess_1");
   });
 
-  it("returns 401 on 401/403 errors from collectAndNormalize", async () => {
+  it("returns 401 when readJsonBody throws a 401 error message", async () => {
     const opts = makeOptions({
       readJsonBody: vi.fn().mockRejectedValue(new Error("GitHub 401: Bad credentials")),
     });

@@ -316,7 +316,7 @@ describe("runPipeline", () => {
     }
   });
 
-  it("uses unknown scope fallback (no underscore in state)", async () => {
+  it("runs pipeline successfully when contributions are present", async () => {
     const evidence = {
       timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
       contributions: [{ id: "r#1", type: "pull_request", title: "T", url: "https://x", repo: "x/y", summary: "s", body: "b" }],
