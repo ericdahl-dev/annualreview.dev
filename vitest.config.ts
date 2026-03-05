@@ -15,6 +15,12 @@ export default defineConfig({
         "test/**",
       ],
       reporter: ["text", "text-summary", "html"],
+      thresholds: {
+        statements: 80,
+        branches: 70,
+        functions: 78,
+        lines: 80,
+      },
     },
   },
 });

@@ -256,6 +256,75 @@ describe("runPipeline", () => {
     );
   });
 
+  it("cache hit fires onProgress for all steps", async () => {
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await runPipeline(evidence, { apiKey: "sk-test" });
+    const steps = [];
+    await runPipeline(evidence, {
+      apiKey: "sk-test",
+      onProgress: (p) => steps.push(p.stepIndex),
+    });
+    expect(steps).toEqual([1, 2, 3, 4]);
+  });
+
+  it("reports prevStepMs and prevStepPayloadTokens via onProgress", async () => {
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    const progressData = [];
+    await runPipeline(evidence, {
+      apiKey: "sk-test",
+      onProgress: (p) => progressData.push(p),
+    });
+    expect(progressData.length).toBeGreaterThanOrEqual(4);
+    const lastStep = progressData[progressData.length - 1];
+    expect(lastStep.totalMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("passes posthogTraceId and posthogDistinctId to LLM calls", async () => {
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await runPipeline(evidence, {
+      apiKey: "sk-test",
+      posthogTraceId: "trace123",
+      posthogDistinctId: "user456",
+    });
+    expect(lastCreateArgs[0]).toMatchObject({
+      posthogTraceId: "trace123",
+      posthogDistinctId: "user456",
+    });
+  });
+
+  it("getMaxUserTokensForTier ignores non-finite env values", () => {
+    const prev = process.env.MAX_USER_TOKENS_FREE;
+    try {
+      process.env.MAX_USER_TOKENS_FREE = "notanumber";
+      expect(getMaxUserTokensForTier(false)).toBe(500_000);
+      process.env.MAX_USER_TOKENS_FREE = "-1";
+      expect(getMaxUserTokensForTier(false)).toBe(500_000);
+      process.env.MAX_USER_TOKENS_FREE = "";
+      expect(getMaxUserTokensForTier(false)).toBe(500_000);
+    } finally {
+      if (prev === undefined) delete process.env.MAX_USER_TOKENS_FREE;
+      else process.env.MAX_USER_TOKENS_FREE = prev;
+    }
+  });
+
+  it("uses unknown scope fallback (no underscore in state)", async () => {
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [{ id: "r#1", type: "pull_request", title: "T", url: "https://x", repo: "x/y", summary: "s", body: "b" }],
+    };
+    const result = await runPipeline(evidence, { apiKey: "sk-test" });
+    expect(result.themes).toBeDefined();
+  });
+
   it("throws step-specific error when LLM returns malformed JSON for a step", async () => {
     mockStepContentsOverride = [
       "not valid json at all",

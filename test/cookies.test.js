@@ -71,4 +71,46 @@ describe("cookies", () => {
     expect(res._headers["Set-Cookie"]).toContain("ar_oauth_state=;");
     expect(res._headers["Set-Cookie"]).toContain("Max-Age=0");
   });
+
+  it("getStateFromRequest returns null when secret is falsy", () => {
+    const log = { calls: [], fn(msg, detail) { log.calls.push([msg, detail]); } };
+    const req = { headers: { cookie: "ar_oauth_state=x" } };
+    expect(getStateFromRequest(req, "", { log: log.fn })).toBeNull();
+    expect(log.calls[0]).toEqual(["state_cookie", "no_secret"]);
+  });
+
+  it("getStateFromRequest returns null when state cookie is missing from header", () => {
+    const log = { calls: [], fn(msg, detail) { log.calls.push([msg, detail]); } };
+    const req = { headers: { cookie: "other=1" } };
+    expect(getStateFromRequest(req, SECRET, { log: log.fn })).toBeNull();
+    expect(log.calls[0]).toEqual(["state_cookie", "no_match"]);
+  });
+
+  it("getStateFromRequest returns null when cookie has no dot separator", () => {
+    const log = { calls: [], fn(msg, detail) { log.calls.push([msg, detail]); } };
+    const req = { headers: { cookie: "ar_oauth_state=nodot" } };
+    expect(getStateFromRequest(req, SECRET, { log: log.fn })).toBeNull();
+    expect(log.calls[0]).toEqual(["state_cookie", "bad_format"]);
+  });
+
+  it("verifySessionId returns null for empty/non-string input", () => {
+    expect(verifySessionId("", SECRET)).toBeNull();
+    expect(verifySessionId(null, SECRET)).toBeNull();
+  });
+
+  it("getSessionIdFromRequest returns null when cookie has no ar_session", () => {
+    expect(getSessionIdFromRequest({ headers: { cookie: "other=x" } }, SECRET)).toBeNull();
+  });
+
+  it("setSessionCookie includes Secure when opts.secure is true", () => {
+    const res = { setHeader: (k, v) => { res._headers = res._headers || {}; res._headers[k] = v; }, _headers: {} };
+    setSessionCookie(res, "sess_1", SECRET, { secure: true });
+    expect(res._headers["Set-Cookie"]).toContain("Secure");
+  });
+
+  it("setStateCookie includes Secure when opts.secure is true", () => {
+    const res = { setHeader: (k, v) => { res._headers = res._headers || {}; res._headers[k] = v; }, _headers: {} };
+    setStateCookie(res, "state1", SECRET, { secure: true });
+    expect(res._headers["Set-Cookie"]).toContain("Secure");
+  });
 });

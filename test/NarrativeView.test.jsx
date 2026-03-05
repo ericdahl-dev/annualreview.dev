@@ -146,4 +146,139 @@ describe("NarrativeView", () => {
     const copyButtons = screen.getAllByRole("button", { name: /copy/i });
     expect(copyButtons.length).toBeGreaterThanOrEqual(1);
   });
+
+  // ── Themes with optional fields ──
+
+  it("renders theme one-liner, why_it_matters, confidence, and notes", () => {
+    const themes = {
+      themes: [
+        {
+          theme_id: "t1",
+          theme_name: "Theme One",
+          one_liner: "A brief desc",
+          why_it_matters: "Because reasons",
+          confidence: "high",
+          notes_or_assumptions: "Some assumptions",
+          anchor_evidence: [{ id: "org/repo#99", url: "https://github.com/org/repo/pull/99" }],
+        },
+      ],
+    };
+    render(<NarrativeView themes={themes} bullets={{ bullets_by_theme: [] }} />);
+    expect(screen.getByText("A brief desc")).toBeInTheDocument();
+    expect(screen.getByText(/Because reasons/)).toBeInTheDocument();
+    expect(screen.getByText(/high/)).toBeInTheDocument();
+    expect(screen.getByText("Some assumptions")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "PR #99" })).toBeInTheDocument();
+  });
+
+  it("renders theme with confidence only (no notes)", () => {
+    const themes = { themes: [{ theme_id: "t2", theme_name: "T2", confidence: "medium" }] };
+    render(<NarrativeView themes={themes} bullets={{ bullets_by_theme: [] }} />);
+    expect(screen.getByText(/medium/)).toBeInTheDocument();
+  });
+
+  it("renders anchor evidence with title override", () => {
+    const themes = {
+      themes: [
+        { theme_id: "t3", theme_name: "T3", anchor_evidence: [{ id: "x", url: "http://x", title: "My PR" }] },
+      ],
+    };
+    render(<NarrativeView themes={themes} bullets={{ bullets_by_theme: [] }} />);
+    expect(screen.getByRole("link", { name: "My PR" })).toBeInTheDocument();
+  });
+
+  // ── STAR stories ──
+
+  it("renders stories with situation, task, actions, results, evidence, confidence", () => {
+    const stories = {
+      stories: [
+        {
+          title: "Incident Response",
+          situation: "System was down",
+          task: "Restore service",
+          actions: ["Restarted pods", "Rolled back deploy"],
+          results: ["99.9% uptime restored"],
+          evidence: [{ id: "org/repo#50", url: "https://github.com/org/repo/pull/50" }],
+          confidence: "high",
+        },
+      ],
+    };
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} stories={stories} />);
+    expect(screen.getByText("Incident Response")).toBeInTheDocument();
+    expect(screen.getByText(/System was down/)).toBeInTheDocument();
+    expect(screen.getByText(/Restore service/)).toBeInTheDocument();
+    expect(screen.getByText("Restarted pods")).toBeInTheDocument();
+    expect(screen.getByText("Rolled back deploy")).toBeInTheDocument();
+    expect(screen.getByText("99.9% uptime restored")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "PR #50" })).toBeInTheDocument();
+    expect(screen.getByText(/Confidence: high/)).toBeInTheDocument();
+  });
+
+  it("shows empty STAR stories state", () => {
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} stories={{ stories: [] }} />);
+    expect(screen.getByText(/no star stories/i)).toBeInTheDocument();
+  });
+
+  it("toggles STAR stories to JSON view", () => {
+    const stories = { stories: [{ title: "S1", situation: "sit" }] };
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} stories={stories} />);
+    fireEvent.click(screen.getByRole("button", { name: /star stories.*json/i }));
+    expect(screen.getByText(/"title"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /star stories.*narrative/i }));
+    expect(screen.queryByText(/"title"/)).not.toBeInTheDocument();
+  });
+
+  // ── Self-eval ──
+
+  it("renders self-eval with summary, accomplishments, how_i_worked, growth, dimensions, next_year_goals", () => {
+    const selfEval = {
+      sections: {
+        summary: { text: "Great year", evidence: [{ id: "org/repo#1", url: "http://x" }] },
+        key_accomplishments: [{ text: "Shipped feature X", evidence: [] }],
+        how_i_worked: { text: "Collaboratively", evidence: [] },
+        growth: { text: "Learned Rust", evidence: [] },
+        performance_dimensions: [
+          { id: "d1", name: "Technical Excellence", text: "Strong", evidence: [{ id: "org/repo#2", url: "http://y" }] },
+        ],
+        next_year_goals: [{ text: "Learn Go", evidence: [] }],
+      },
+    };
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} self_eval={selfEval} />);
+    expect(screen.getByText("Great year")).toBeInTheDocument();
+    expect(screen.getByText("Shipped feature X")).toBeInTheDocument();
+    expect(screen.getByText("Collaboratively")).toBeInTheDocument();
+    expect(screen.getByText("Learned Rust")).toBeInTheDocument();
+    expect(screen.getByText("Technical Excellence")).toBeInTheDocument();
+    expect(screen.getByText(/Strong/)).toBeInTheDocument();
+    expect(screen.getByText("Learn Go")).toBeInTheDocument();
+  });
+
+  it("shows empty self-eval when sections is undefined", () => {
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} self_eval={undefined} />);
+    expect(screen.getByText(/no self-eval sections/i)).toBeInTheDocument();
+  });
+
+  it("shows empty self-eval when sections has no content", () => {
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} self_eval={{ sections: {} }} />);
+    expect(screen.getByText(/no self-eval sections/i)).toBeInTheDocument();
+  });
+
+  it("toggles self-eval to JSON view", () => {
+    const selfEval = { sections: { summary: { text: "Good" } } };
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} self_eval={selfEval} />);
+    fireEvent.click(screen.getByRole("button", { name: /self-eval.*json/i }));
+    expect(screen.getByText(/"summary"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /self-eval.*narrative/i }));
+    expect(screen.queryByText(/"summary"/)).not.toBeInTheDocument();
+  });
+
+  it("renders performance dimension with id fallback (no name)", () => {
+    const selfEval = {
+      sections: {
+        performance_dimensions: [{ id: "tech", text: "Good" }],
+      },
+    };
+    render(<NarrativeView themes={mockThemes} bullets={mockBullets} self_eval={selfEval} />);
+    expect(screen.getByText("tech")).toBeInTheDocument();
+  });
 });
