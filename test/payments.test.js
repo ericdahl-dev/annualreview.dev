@@ -227,9 +227,7 @@ describe("paymentsRoutes – webhook", () => {
     }
   });
 
-  it.skipIf(!process.env.DATABASE_URL)("awards credits on checkout.session.completed when payment_status is paid", async () => {
-    const { clearCreditStore, getCredits, getCreditsPerPurchase } = await import("../lib/payment-store.ts");
-    await clearCreditStore();
+  it("awards credits on checkout.session.completed when payment_status is paid", async () => {
     const stripeEvent = {
       type: "checkout.session.completed",
       data: {
@@ -243,28 +241,29 @@ describe("paymentsRoutes – webhook", () => {
     const mockStripe = {
       webhooks: { constructEvent: vi.fn().mockReturnValue(stripeEvent) },
     };
+    const mockAwardCredits = vi.fn().mockResolvedValue(undefined);
     const origSecret = process.env.STRIPE_WEBHOOK_SECRET;
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
     try {
       const handler = paymentsRoutes(
-        makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
+        makeRouteOptions({
+          getStripe: () => /** @type {any} */ (mockStripe),
+          awardCredits: mockAwardCredits,
+        })
       );
       const req = mockReq("POST", "/webhook", {}, { "stripe-signature": "t=1,v1=abc" });
       const res = mockRes();
       await handler(req, res, () => {});
       expect(res.statusCode).toBe(200);
       expect(res.body).toMatchObject({ received: true });
-      const expectedCredits = getCreditsPerPurchase();
-      expect(await getCredits("alice")).toBe(expectedCredits);
+      expect(mockAwardCredits).toHaveBeenCalledWith("alice", "cs_sync_paid");
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;
     }
   });
 
-  it.skipIf(!process.env.DATABASE_URL)("does NOT award credits on checkout.session.completed when payment_status is unpaid (async payment method)", async () => {
-    const { clearCreditStore, getCredits } = await import("../lib/payment-store.ts");
-    await clearCreditStore();
+  it("does NOT award credits on checkout.session.completed when payment_status is unpaid (async payment method)", async () => {
     const stripeEvent = {
       type: "checkout.session.completed",
       data: {
@@ -278,21 +277,21 @@ describe("paymentsRoutes – webhook", () => {
     const mockStripe = {
       webhooks: { constructEvent: vi.fn().mockReturnValue(stripeEvent) },
     };
+    const mockAwardCredits = vi.fn().mockResolvedValue(undefined);
     const origSecret = process.env.STRIPE_WEBHOOK_SECRET;
     process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
     try {
       const handler = paymentsRoutes(
-        makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
+        makeRouteOptions({
+          getStripe: () => /** @type {any} */ (mockStripe),
+          awardCredits: mockAwardCredits,
+        })
       );
       const req = mockReq("POST", "/webhook", {}, { "stripe-signature": "t=1,v1=abc" });
       const res = mockRes();
-      await new Promise((resolve) => {
-        const p = handler(req, res, resolve);
-        p.then(resolve).catch(resolve);
-      });
-      await new Promise((r) => setTimeout(r, 100));
+      await handler(req, res, () => {});
       expect(res.statusCode).toBe(200);
-      expect(await getCredits("bob")).toBe(0);
+      expect(mockAwardCredits).not.toHaveBeenCalled();
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;

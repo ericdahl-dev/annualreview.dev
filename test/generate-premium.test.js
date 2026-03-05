@@ -1,10 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { generateRoutes } from "../server/routes/generate.ts";
-import { clearCreditStore, awardCredits, getCredits } from "../lib/payment-store.ts";
 import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
 import { mockRes, respondJson } from "./helpers.js";
-
-const hasDb = !!process.env.DATABASE_URL;
 
 const validEvidence = {
   timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
@@ -281,11 +278,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
   });
 });
 
-describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
-  beforeEach(async () => {
-    await clearCreditStore();
-  });
-
+describe("generateRoutes – premium flag", () => {
   it("runs free pipeline when no stripe_session_id and no _premium flag", async () => {
     const opts = makeOptions();
     const handler = generateRoutes(opts);
@@ -302,9 +295,10 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   });
 
   it("passes session id to createJob for premium generate when logged in", async () => {
-    await awardCredits("alice", "cs_prev");
     const opts = makeOptionsLoggedIn("alice", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      deductCredit: vi.fn().mockResolvedValue(true),
+      getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
@@ -354,12 +348,13 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   });
 
   it("runs premium pipeline and deducts one credit when user has credits", async () => {
-    await awardCredits("alice", "cs_prev_purchase"); // award 1 credit to alice
     const opts = makeOptionsLoggedIn("alice", {
       readJsonBody: vi.fn().mockResolvedValue({
         ...validEvidence,
         _stripe_session_id: "cs_prev_purchase", // already in credit_events — fast path
       }),
+      deductCredit: vi.fn().mockResolvedValue(true),
+      getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
@@ -371,15 +366,14 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
       expect.objectContaining({ premium: true })
     );
     expect(res.body).toMatchObject({ job_id: "job-1", premium: true });
-    // 1 awarded, 1 deducted → 0 remaining
     expect(res.body.credits_remaining).toBe(0);
-    expect(await getCredits("alice")).toBe(0);
   });
 
   it("runs premium pipeline via _premium flag (no session ID needed for repeat use)", async () => {
-    await awardCredits("bob", "cs_bob_purchase");
     const opts = makeOptionsLoggedIn("bob", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      deductCredit: vi.fn().mockResolvedValue(true),
+      getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
@@ -401,14 +395,19 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
         },
       },
     };
+    const mockAwardCredits = vi.fn().mockResolvedValue(undefined);
     const opts = makeOptionsLoggedIn("carol", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_new" }),
       getStripe: () => mockStripe,
+      awardCredits: mockAwardCredits,
+      deductCredit: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
+      getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
     const res = mockRes();
     await handler(req, res, () => {});
+    expect(mockAwardCredits).toHaveBeenCalledWith("carol", "cs_new");
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
     // 1 awarded, 1 deducted → 0 remaining
     expect(res.body.credits_remaining).toBe(0);
@@ -429,6 +428,8 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
     const opts = makeOptionsLoggedIn("dave", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_other_user" }),
       getStripe: () => mockStripe,
+      deductCredit: vi.fn().mockResolvedValue(false),
+      awardCredits: vi.fn().mockResolvedValue(undefined),
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
@@ -439,22 +440,19 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   });
 
   it("returns 402 when all credits are exhausted", async () => {
-    await awardCredits("fiona", "cs_fiona");
-    // Use all 1 credit
-    for (let i = 0; i < 1; i++) {
-      const res = mockRes();
-      await generateRoutes(makeOptionsLoggedIn("fiona", {
-        readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
-      }))({ method: "POST", url: "/" }, res, () => {});
-      expect(res.statusCode).toBe(202);
-    }
-    // Now out of credits; getStripe returns null so inline verify fails → 402
-    const res = mockRes();
-    await generateRoutes(makeOptionsLoggedIn("fiona", {
+    const deductCreditMock = vi.fn().mockResolvedValue(true).mockResolvedValueOnce(true).mockResolvedValue(false);
+    const opts = makeOptionsLoggedIn("fiona", {
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
-    }))({ method: "POST", url: "/" }, res, () => {});
-    expect(res.statusCode).toBe(402);
-    expect(res.body.error).toMatch(/no premium credits/i);
+      deductCredit: deductCreditMock,
+    });
+    const handler = generateRoutes(opts);
+    const res1 = mockRes();
+    await handler({ method: "POST", url: "/" }, res1, () => {});
+    expect(res1.statusCode).toBe(202);
+    const res2 = mockRes();
+    await handler({ method: "POST", url: "/" }, res2, () => {});
+    expect(res2.statusCode).toBe(402);
+    expect(res2.body.error).toMatch(/no premium credits/i);
   });
 
   it("strips _stripe_session_id and _premium from evidence before pipeline", async () => {
