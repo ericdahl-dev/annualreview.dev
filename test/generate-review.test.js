@@ -107,6 +107,61 @@ describe("runGenerateReview", () => {
     rmSync(dir, { recursive: true });
   });
 
+  it("onStepProgress writes prev step completion for step > 1", () => {
+    vi.useFakeTimers();
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    onStepProgress(1, 4, "Themes", 5);
+    vi.advanceTimersByTime(100);
+    onStepProgress(2, 4, "Bullets", 5);
+    vi.advanceTimersByTime(100);
+    stopStepAnimation();
+    const calls = writeSpy.mock.calls.flat().join("");
+    expect(calls).toContain("✓");
+    expect(calls).toContain("Themes");
+    writeSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("onStepProgress with large contribution count uses 1–2 min estimate", () => {
+    vi.useFakeTimers();
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    onStepProgress(1, 4, "Themes", 25);
+    vi.advanceTimersByTime(100);
+    const output = writeSpy.mock.calls.flat().join("");
+    expect(output).toContain("1–2 min");
+    stopStepAnimation();
+    writeSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("onStepProgress with small contribution count uses ~30s estimate", () => {
+    vi.useFakeTimers();
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    onStepProgress(1, 4, "Themes", 10);
+    vi.advanceTimersByTime(100);
+    const output = writeSpy.mock.calls.flat().join("");
+    expect(output).toContain("~30s");
+    stopStepAnimation();
+    writeSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("onStepProgress for step > 1 uses ~30s estimate", () => {
+    vi.useFakeTimers();
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    onStepProgress(2, 4, "Bullets", 0);
+    vi.advanceTimersByTime(100);
+    const output = writeSpy.mock.calls.flat().join("");
+    expect(output).toContain("~30s");
+    stopStepAnimation();
+    writeSpy.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("stopStepAnimation is idempotent (no-op if no animation)", () => {
+    expect(() => stopStepAnimation()).not.toThrow();
+  });
+
   it("rejects when input file is missing", async () => {
     const dir = join(tmpdir(), randomUUID());
     mkdirSync(dir, { recursive: true });

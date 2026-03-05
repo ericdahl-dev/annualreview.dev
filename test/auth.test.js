@@ -33,6 +33,11 @@ describe("auth", () => {
       expect(url).toContain("read%3Auser");
       expect(url).toContain("repo");
     });
+
+    it("falls back to public scope for unknown scope value", () => {
+      const url = getAuthRedirectUrl("unknown_scope", "s", "https://x/cb", clientId);
+      expect(url).toContain("public_repo");
+    });
   });
 
   describe("exchangeCodeForToken", () => {
@@ -54,6 +59,26 @@ describe("auth", () => {
       await expect(
         exchangeCodeForToken("bad", "https://app/cb", clientId, clientSecret, fetchFn)
       ).rejects.toThrow();
+    });
+
+    it("throws when GitHub returns error in body", async () => {
+      const fetchFn = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ error: "bad_verification_code", error_description: "The code passed is incorrect" }),
+      });
+      await expect(
+        exchangeCodeForToken("bad", "https://app/cb", clientId, clientSecret, fetchFn)
+      ).rejects.toThrow("The code passed is incorrect");
+    });
+
+    it("throws when no access_token in response", async () => {
+      const fetchFn = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      });
+      await expect(
+        exchangeCodeForToken("bad", "https://app/cb", clientId, clientSecret, fetchFn)
+      ).rejects.toThrow("No access_token");
     });
   });
 
@@ -148,6 +173,90 @@ describe("auth", () => {
       };
       await handleCallback(req, res, deps);
       expect(res.writeHead).toHaveBeenCalledWith(302, { Location: "/generate?error=auth_failed" });
+    });
+
+    it("fails when code is missing", async () => {
+      const res = { writeHead: vi.fn(), end: vi.fn(), setHeader: vi.fn() };
+      const req = { url: "/api/auth/callback/github?state=st1", headers: {} };
+      const deps = {
+        getStateFromRequest: () => "st1",
+        clearStateCookie: vi.fn(),
+        setSessionCookie: vi.fn(),
+        createSession: vi.fn(),
+        redirectUri: "https://app/cb",
+        sessionSecret: secret,
+      };
+      await handleCallback(req, res, deps);
+      expect(res.writeHead).toHaveBeenCalledWith(302, { Location: "/generate?error=auth_failed" });
+    });
+
+    it("fails when stored state is null (no stored state)", async () => {
+      const res = { writeHead: vi.fn(), end: vi.fn(), setHeader: vi.fn() };
+      const req = { url: "/api/auth/callback/github?code=abc&state=st1", headers: {} };
+      const deps = {
+        getStateFromRequest: () => null,
+        getAndRemoveOAuthState: () => null,
+        clearStateCookie: vi.fn(),
+        setSessionCookie: vi.fn(),
+        createSession: vi.fn(),
+        redirectUri: "https://app/cb",
+        sessionSecret: secret,
+      };
+      await handleCallback(req, res, deps);
+      expect(res.writeHead).toHaveBeenCalledWith(302, { Location: "/generate?error=auth_failed" });
+    });
+
+    it("fails when token exchange throws", async () => {
+      const res = { writeHead: vi.fn(), end: vi.fn(), setHeader: vi.fn() };
+      const req = { url: "/api/auth/callback/github?code=abc&state=st1", headers: {} };
+      const deps = {
+        getStateFromRequest: () => "st1",
+        clearStateCookie: vi.fn(),
+        setSessionCookie: vi.fn(),
+        createSession: vi.fn(),
+        exchangeCodeForToken: vi.fn().mockRejectedValue(new Error("exchange failed")),
+        getGitHubUser: vi.fn(),
+        redirectUri: "https://app/cb",
+        sessionSecret: secret,
+      };
+      await handleCallback(req, res, deps);
+      expect(res.writeHead).toHaveBeenCalledWith(302, { Location: "/generate?error=auth_failed" });
+    });
+
+    it("uses getAndRemoveOAuthState fallback when getStateFromRequest returns null", async () => {
+      const res = { writeHead: vi.fn(), end: vi.fn(), setHeader: vi.fn() };
+      const req = { url: "/api/auth/callback/github?code=abc&state=st1", headers: {} };
+      const deps = {
+        getStateFromRequest: () => null,
+        getAndRemoveOAuthState: (state) => state === "st1" ? "st1" : null,
+        clearStateCookie: vi.fn(),
+        setSessionCookie: vi.fn(),
+        createSession: vi.fn().mockReturnValue("sess_1"),
+        exchangeCodeForToken: vi.fn().mockResolvedValue("tok_abc"),
+        getGitHubUser: vi.fn().mockResolvedValue({ login: "u" }),
+        redirectUri: "https://app/cb",
+        sessionSecret: secret,
+      };
+      await handleCallback(req, res, deps);
+      expect(deps.createSession).toHaveBeenCalled();
+      expect(res.writeHead).toHaveBeenCalledWith(302, { Location: "/generate" });
+    });
+
+    it("extracts scope from state param", async () => {
+      const res = { writeHead: vi.fn(), end: vi.fn(), setHeader: vi.fn() };
+      const req = { url: "/api/auth/callback/github?code=abc&state=private_rand1", headers: {} };
+      const deps = {
+        getStateFromRequest: () => "private_rand1",
+        clearStateCookie: vi.fn(),
+        setSessionCookie: vi.fn(),
+        createSession: vi.fn().mockReturnValue("sess_1"),
+        exchangeCodeForToken: vi.fn().mockResolvedValue("tok"),
+        getGitHubUser: vi.fn().mockResolvedValue({ login: "u" }),
+        redirectUri: "https://app/cb",
+        sessionSecret: secret,
+      };
+      await handleCallback(req, res, deps);
+      expect(deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ scope: "private" }));
     });
   });
 
