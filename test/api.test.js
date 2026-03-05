@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { parseJsonResponse, pollJob } from "../src/api.ts";
+import { parseJsonResponse, pollJob } from "../src/api.js";
 
 describe("parseJsonResponse", () => {
   it("parses valid JSON from ok response", async () => {
