@@ -14,7 +14,7 @@ export default defineConfig({
         "**/*.config.ts",
         "test/**",
       ],
-      reporter: ["text", "text-summary", "html"],
+      reporter: ["text", "text-summary", "html", "lcov"],
       thresholds: {
         statements: 80,
         branches: 70,
