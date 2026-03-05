@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { posthog } from "../posthog.js";
 
 export interface AuthUser {
   login: string;
@@ -14,9 +15,10 @@ export function useAuth() {
       .then((res) =>
         res.ok ? res.json() : Promise.reject(new Error("not authenticated"))
       )
-      .then((data: { login: string; scope?: string }) =>
-        setUser({ login: data.login, scope: data.scope })
-      )
+      .then((data: { login: string; scope?: string }) => {
+        setUser({ login: data.login, scope: data.scope });
+        try { posthog?.identify(data.login); } catch { /* non-critical */ }
+      })
       .catch(() => setUser(null))
       .finally(() => setAuthChecked(true));
   }, []);
