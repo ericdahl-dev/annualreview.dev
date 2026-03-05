@@ -3,6 +3,7 @@
 // POST /api/collect → 202 { job_id }; POST /api/generate → 202 { job_id }. Poll GET /api/jobs/:id for status/result.
 import { defineConfig, loadEnv, type ConfigEnv, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
+import { codecovVitePlugin } from "@codecov/vite-plugin";
 import { runPipeline } from "./lib/run-pipeline.js";
 import { collectAndNormalize } from "./lib/collect-and-normalize.js";
 import { validateEvidence } from "./lib/validate-evidence.js";
@@ -181,7 +182,14 @@ function apiRoutesPlugin() {
 
 
 export default defineConfig({
-  plugins: [react(), apiRoutesPlugin()],
+  plugins: [
+    react(),
+    apiRoutesPlugin(),
+    codecovVitePlugin({
+      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+      bundleName: "annualreview-dev",
+      uploadToken: process.env.CODECOV_TOKEN,
+    }),
+  ],
   envPrefix: ["VITE_", "POSTHOG"],
-
 });

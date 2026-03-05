@@ -103,6 +103,14 @@ yarn typecheck
 
 Payment- and premium-related tests (`test/payments.test.js`, `test/generate-premium.test.js`) require `DATABASE_URL` to be set (e.g. a Neon branch or test database).
 
+### Codecov
+
+CI uploads coverage after tests. To ensure uploads succeed:
+
+1. **Token**: In GitHub → Settings → Secrets and variables → Actions, add `CODECOV_TOKEN`. Get the value from [Codecov](https://codecov.io/gh/ericdahl-dev/annualreview.dev) → Settings → General → Repository Upload Token. (Required for private repos; recommended for public.)
+2. **Default branch**: In Codecov → Settings → General, set **Default branch** to `main`.
+3. **Verify**: After a push or PR, check the "Upload coverage to Codecov" step in the Actions run. If it fails, the job fails and verbose logs show the reason. Success means the commit appears on the Codecov dashboard and PRs show head/patch coverage.
+
 ## Evidence grounding contract
 
 Every generated bullet/claim cites at least one evidence item by id + URL. If impact cannot be proven from GitHub alone, the output labels it _"needs confirmation"_ and asks a follow-up question rather than guessing.

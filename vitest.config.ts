@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     globals: true,
     setupFiles: ["./test/setup.js"],
+    reporters: ["default", "junit"],
+    outputFile: { junit: "test-report.junit.xml" },
     coverage: {
       provider: "v8",
       exclude: [
