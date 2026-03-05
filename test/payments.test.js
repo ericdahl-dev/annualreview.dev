@@ -7,7 +7,6 @@ function makeRouteOptions(overrides = {}) {
   return {
     respondJson,
     getStripe: () => null,
-    getPostHog: () => ({ isFeatureEnabled: vi.fn().mockResolvedValue(true) }),
     getSessionIdFromRequest: () => null,
     getSession: () => undefined,
     ...overrides,
@@ -24,22 +23,7 @@ describe("paymentsRoutes – config", () => {
     expect(res.body).toMatchObject({ enabled: false, price_cents: 100, credits_per_purchase: getCreditsPerPurchase() });
   });
 
-  it("returns enabled:false when feature flag is off", async () => {
-    const mockStripe = { checkout: { sessions: {} } };
-    const handler = paymentsRoutes(
-      makeRouteOptions({
-        getStripe: () => /** @type {any} */ (mockStripe),
-        getPostHog: () => ({ isFeatureEnabled: vi.fn().mockResolvedValue(false) }),
-      })
-    );
-    const req = mockReq("GET", "/config");
-    const res = mockRes();
-    await handler(req, res, () => {});
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ enabled: false });
-  });
-
-  it("returns enabled:true when Stripe is configured and flag is on", async () => {
+  it("returns enabled:true when Stripe is configured", async () => {
     const mockStripe = { checkout: { sessions: {} } };
     const handler = paymentsRoutes(
       makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
@@ -53,23 +37,6 @@ describe("paymentsRoutes – config", () => {
 });
 
 describe("paymentsRoutes – checkout", () => {
-  it("returns 503 when feature flag is disabled", async () => {
-    const handler = paymentsRoutes(
-      makeRouteOptions({
-        getPostHog: () => ({ isFeatureEnabled: vi.fn().mockResolvedValue(false) }),
-      })
-    );
-    const req = mockReq("POST", "/checkout");
-    const res = mockRes();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-      handler(req, res, resolve);
-    });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(res.statusCode).toBe(503);
-    expect(res.body.error).toMatch(/disabled/i);
-  });
-
   it("returns 503 when STRIPE_SECRET_KEY is not set", async () => {
     const handler = paymentsRoutes(makeRouteOptions({ getStripe: () => null }));
     const req = mockReq("POST", "/checkout");

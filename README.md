@@ -80,7 +80,7 @@ In your GitHub OAuth App settings, set the **Authorization callback URL** to `ht
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | Neon (or any Postgres) connection string. Required for premium credits and Stripe payments; tables `credits` and `credit_events` are created automatically. |
-| `STRIPE_SECRET_KEY` | Stripe secret key. Required for payments (also requires `STRIPE_WEBHOOK_SECRET` and the PostHog feature flag `enable-stripe-payments`). |
+| `STRIPE_SECRET_KEY` | Stripe secret key. Required for payments (also requires `STRIPE_WEBHOOK_SECRET`). |
 | `STRIPE_WEBHOOK_SECRET` | Secret for verifying Stripe webhook signatures. |
 | `STRIPE_PRICE_CENTS` | Price per purchase in cents (default `100` = $1.00). |
 | `STRIPE_CURRENCY` | Payment currency code (default `usd`). |

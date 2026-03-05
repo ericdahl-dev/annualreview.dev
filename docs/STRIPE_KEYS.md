@@ -30,7 +30,7 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 - API keys: <https://dashboard.stripe.com/acct_1SNmB9IoMF0fqmmJ/apikeys>
 - Webhooks: <https://dashboard.stripe.com/webhooks>
 
-Payments are only enabled when `STRIPE_SECRET_KEY` is set and the PostHog feature flag `enable-stripe-payments` is on for the user.
+Payments are enabled when `STRIPE_SECRET_KEY` is set.
 
 ## Stripe best practices (this app)
 
@@ -47,4 +47,4 @@ Payments are only enabled when `STRIPE_SECRET_KEY` is set and the PostHog featur
 2. **Webhook endpoint** – In [Stripe Dashboard → Webhooks](https://dashboard.stripe.com/webhooks), ensure the endpoint URL is your production URL (e.g. `https://annualreview.dev/api/payments/webhook`). Create a separate endpoint for live if you were using test before.
 3. **Webhook signing secret** – Confirm `STRIPE_WEBHOOK_SECRET` is the one from the **live** endpoint (value starts with `whsec_`). Test and live endpoints have different secrets.
 4. **Dynamic payment methods** – In Dashboard, consider enabling [dynamic payment methods](https://docs.stripe.com/payments/payment-methods/integration-options) so Stripe can offer the best options per user.
-5. **App-specific** – This app uses **Checkout Sessions only** (no Charges API, Sources, or Card Element). Webhooks are verified with `stripe.webhooks.constructEvent`; no raw card data is handled. Before enabling for users: turn on the PostHog feature flag `enable-stripe-payments` when ready; confirm `STRIPE_PRICE_CENTS`, `STRIPE_CURRENCY`, and `CREDITS_PER_PURCHASE` are set as intended for production.
+5. **App-specific** – This app uses **Checkout Sessions only** (no Charges API, Sources, or Card Element). Webhooks are verified with `stripe.webhooks.constructEvent`; no raw card data is handled. Confirm `STRIPE_PRICE_CENTS`, `STRIPE_CURRENCY`, and `CREDITS_PER_PURCHASE` are set as intended for production.
