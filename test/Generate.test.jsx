@@ -396,6 +396,41 @@ describe("Generate", () => {
       expect(screen.getByText(/GPT 4o Mini/i)).toBeInTheDocument();
     });
   });
+
+  it("when generating, shows progress UI and hides both generate buttons", async () => {
+    let jobResolve;
+    const jobHang = new Promise((r) => { jobResolve = r; });
+    let jobCalls = 0;
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate") return Promise.resolve(mockRes({ job_id: "j1" }, true, 202));
+      if (String(url).includes("/api/jobs/")) {
+        jobCalls++;
+        return jobCalls === 1
+          ? Promise.resolve(mockRes({ status: "running", progress: "1/5 Themes" }))
+          : jobHang;
+      }
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: {
+        value: JSON.stringify({
+          timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+          contributions: [],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/1\/5/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole("progressbar", { name: /generating review/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /generate review/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /premium/i })).not.toBeInTheDocument();
+    jobResolve({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } });
+  });
 });
 
 describe("pollJob", () => {
