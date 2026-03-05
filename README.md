@@ -1,5 +1,8 @@
 # AnnualReview.dev
 
+[![CI](https://github.com/ericdahl-dev/annualreview.dev/actions/workflows/ci.yml/badge.svg)](https://github.com/ericdahl-dev/annualreview.dev/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ericdahl-dev/annualreview.dev/graph/badge.svg)](https://codecov.io/gh/ericdahl-dev/annualreview.dev)
+
 Turn your GitHub activity into an evidence-backed annual review in minutes. **https://annualreview.dev**
 
 Sign in with GitHub (or use a token), pick your date range, and get themes, impact bullets, STAR stories, and self-eval sections — every claim linked to a real PR.
