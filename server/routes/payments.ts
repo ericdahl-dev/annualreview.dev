@@ -24,6 +24,9 @@ export interface PaymentsRoutesOptions {
   getPostHog?: () => PostHog | null;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
+  /** Optional for tests; when not provided uses real payment store (requires DATABASE_URL). */
+  awardCredits?: (userLogin: string, sessionId: string) => Promise<void>;
+  getCredits?: (userLogin: string) => Promise<number>;
 }
 
 type Next = () => void;
@@ -83,6 +86,8 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     getPostHog = getPostHogClient,
     getSessionIdFromRequest,
     getSession,
+    awardCredits: awardCreditsFn = awardCredits,
+    getCredits: getCreditsFn = getCredits,
   } = options;
 
   return async function paymentsMiddleware(
@@ -120,7 +125,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         respondJson(res, 401, { error: "Login required" });
         return;
       }
-      respondJson(res, 200, { credits: await getCredits(userSession.login) });
+      respondJson(res, 200, { credits: await getCreditsFn(userSession.login) });
       return;
     }
     if (path === "checkout" && req.method === "POST") {
@@ -216,7 +221,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
           // always be 'paid' here, but the check is kept for defense-in-depth.
           const userLogin = session.metadata?.user_login;
           if (session.payment_status === "paid" && userLogin) {
-            await awardCredits(userLogin, session.id);
+            await awardCreditsFn(userLogin, session.id);
             console.log("[payments] credits awarded");
           } else {
             console.log("[payments] checkout.session.completed skipped: payment_status =", session.payment_status);
