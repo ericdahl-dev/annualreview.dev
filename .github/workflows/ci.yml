@@ -26,12 +26,21 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
+      - name: Verify coverage artifact
+        run: |
+          if [ ! -f coverage/lcov.info ]; then
+            echo "::error::coverage/lcov.info not found — coverage was not generated"
+            exit 1
+          fi
+          wc -l coverage/lcov.info
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+          directory: ./coverage
+          fail_ci_if_error: true
+          verbose: true
 
       - name: Typecheck
         run: yarn typecheck
