@@ -273,15 +273,19 @@ describe("Generate", () => {
       }
     }
     vi.stubGlobal("FileReader", MockFileReader);
-    render(<Generate />);
-    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/auth/me", expect.any(Object)));
-    const input = document.querySelector('input[type="file"]');
-    fireEvent.change(input, { target: { files: [file] } });
-    await waitFor(() => {
-      const textarea = screen.getByPlaceholderText(/timeframe.*contributions/);
-      expect(textarea.value).toContain("2025-01-01");
-      expect(textarea.value).toContain("contributions");
-    });
+    try {
+      render(<Generate />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/auth/me", expect.any(Object)));
+      const input = document.querySelector('input[type="file"]');
+      fireEvent.change(input, { target: { files: [file] } });
+      await waitFor(() => {
+        const textarea = screen.getByPlaceholderText(/timeframe.*contributions/);
+        expect(textarea.value).toContain("2025-01-01");
+        expect(textarea.value).toContain("contributions");
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("Try sample shows error when fetch fails", async () => {
@@ -309,16 +313,24 @@ describe("Generate", () => {
     });
     const createObjectURL = vi.fn(() => "blob:mock");
     const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
-    render(<Generate />);
-    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
-      target: { value: JSON.stringify({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] }) },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /download \.md/i })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /download \.md/i }));
-    expect(createObjectURL).toHaveBeenCalled();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    try {
+      render(<Generate />);
+      fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+        target: { value: JSON.stringify({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] }) },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+      await waitFor(() => expect(screen.getByRole("button", { name: /download \.md/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /download \.md/i }));
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+    } finally {
+      URL.createObjectURL = origCreate;
+      URL.revokeObjectURL = origRevoke;
+    }
   });
 
   it("Log out calls logout and clears signed-in state", async () => {
@@ -337,6 +349,7 @@ describe("Generate", () => {
   });
 
   it("shows auth error when URL has error=auth_failed", async () => {
+    const origDescriptor = Object.getOwnPropertyDescriptor(window, "location");
     const loc = window.location;
     Object.defineProperty(window, "location", {
       configurable: true,
@@ -350,10 +363,16 @@ describe("Generate", () => {
         reload: loc.reload,
       },
     });
-    render(<Generate />);
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/sign-in.*complete|callback URL/i);
-    });
+    try {
+      render(<Generate />);
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(/sign-in.*complete|callback URL/i);
+      });
+    } finally {
+      if (origDescriptor) {
+        Object.defineProperty(window, "location", origDescriptor);
+      }
+    }
   });
 
   it("Use the terminal tab shows terminal instructions", async () => {
