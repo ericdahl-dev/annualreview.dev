@@ -648,52 +648,60 @@ yarn normalize --input raw.json --output evidence.json`}
         </div>
 
         {error && <p className="generate-error">{error}</p>}
-        {progress && <p className="generate-progress">{progress}</p>}
 
-        <div className="generate-actions">
-          <div className="generate-actions-buttons">
-            <button
-              type="button"
-              className="generate-btn"
-              onClick={() => handleGenerate()}
-              disabled={loading}
-            >
-              <span className="generate-btn-inner">
-                <span>{loading ? "Generating…" : paymentsEnabled ? "3. Generate review (free)" : "3. Generate review"}</span>
-                {!loading && freeModel && <span className="generate-btn-model">{formatModelName(freeModel)}</span>}
-              </span>
-            </button>
-            {paymentsEnabled && (
-              premiumCredits !== null && premiumCredits > 0 ? (
-                <button
-                  type="button"
-                  className="generate-btn generate-btn-premium"
-                  onClick={handleUsePremiumCredit}
-                  disabled={loading}
-                  title={`Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model`}
-                >
-                  <span className="generate-btn-inner">
-                    <span>✦ Generate premium report</span>
-                    {premiumModel && <span className="generate-btn-model">{formatModelName(premiumModel)}</span>}
-                    <span className="generate-btn-credits">{premiumCredits} credit{premiumCredits !== 1 ? "s" : ""} left</span>
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="generate-btn generate-btn-premium"
-                  onClick={handleUpgradeToPremium}
-                  disabled={loading}
-                  title={`${creditsPerPurchase} credits for $${(priceCents / 100).toFixed(2)} (1 run = 1 credit). Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model.`}
-                >
-                  <span className="generate-btn-inner">
-                    <span>✦ Upgrade to premium — {creditsPerPurchase} credits for ${(priceCents / 100).toFixed(2)}</span>
-                    {premiumModel && <span className="generate-btn-model">{formatModelName(premiumModel)}</span>}
-                  </span>
-                </button>
-              )
-            )}
-          </div>
+        <div className="generate-actions" aria-busy={loading}>
+          {loading ? (
+            <div className="generate-actions-progress">
+              <div
+                className="generate-progress-bar"
+                role="progressbar"
+                aria-label="Generating review"
+                aria-valuetext={progress || undefined}
+              />
+              {progress && <p className="generate-progress">{progress}</p>}
+            </div>
+          ) : (
+            <div className="generate-actions-buttons">
+              <button
+                type="button"
+                className="generate-btn"
+                onClick={() => handleGenerate()}
+              >
+                <span className="generate-btn-inner">
+                  <span>{paymentsEnabled ? "3. Generate review (free)" : "3. Generate review"}</span>
+                  {freeModel && <span className="generate-btn-model">{formatModelName(freeModel)}</span>}
+                </span>
+              </button>
+              {paymentsEnabled && (
+                premiumCredits !== null && premiumCredits > 0 ? (
+                  <button
+                    type="button"
+                    className="generate-btn generate-btn-premium"
+                    onClick={handleUsePremiumCredit}
+                    title={`Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model`}
+                  >
+                    <span className="generate-btn-inner">
+                      <span>✦ Generate premium report</span>
+                      {premiumModel && <span className="generate-btn-model">{formatModelName(premiumModel)}</span>}
+                      <span className="generate-btn-credits">{premiumCredits} credit{premiumCredits !== 1 ? "s" : ""} left</span>
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="generate-btn generate-btn-premium"
+                    onClick={handleUpgradeToPremium}
+                    title={`${creditsPerPurchase} credits for $${(priceCents / 100).toFixed(2)} (1 run = 1 credit). Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model.`}
+                  >
+                    <span className="generate-btn-inner">
+                      <span>✦ Upgrade to premium — {creditsPerPurchase} credits for ${(priceCents / 100).toFixed(2)}</span>
+                      {premiumModel && <span className="generate-btn-model">{formatModelName(premiumModel)}</span>}
+                    </span>
+                  </button>
+                )
+              )}
+            </div>
+          )}
         </div>
 
         {result && (
