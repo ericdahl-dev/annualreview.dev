@@ -78,6 +78,209 @@ describe("generateRoutes – payments not configured", () => {
   });
 });
 
+describe("generateRoutes – error and progress paths", () => {
+  it("returns 500 on unexpected error from readJsonBody", async () => {
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockRejectedValue(new Error("network failure")),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("network failure");
+  });
+
+  it("returns 500 with fallback message when error has no message", async () => {
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockRejectedValue(new Error("")),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe("Pipeline failed");
+  });
+
+  it("calls next for non-POST requests", async () => {
+    const opts = makeOptions();
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    const next = vi.fn();
+    await handler({ method: "GET", url: "/" }, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("fires onProgress callback and passes progress string to report", async () => {
+    let capturedReport = null;
+    const opts = makeOptions({
+      runInBackground: vi.fn((jobId, fn) => {
+        capturedReport = vi.fn();
+        fn(capturedReport);
+      }),
+      runPipeline: vi.fn((ev, { onProgress }) => {
+        onProgress({ stepIndex: 1, total: 3, label: "themes" });
+        return Promise.resolve({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
+      }),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(capturedReport).toHaveBeenCalledWith({ progress: "1/3 themes" });
+  });
+});
+
+describe("generateRoutes – premium paths (mocked payment functions)", () => {
+  it("returns 401 when wantsPremium, payments configured, but user not logged in", async () => {
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      isPaymentsConfigured: () => true,
+      getSessionIdFromRequest: vi.fn().mockReturnValue(null),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error).toMatch(/login required/i);
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("returns 402 when deductCredit returns false and no stripe session provided", async () => {
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      isPaymentsConfigured: () => true,
+      deductCredit: vi.fn().mockResolvedValue(false),
+      getCredits: vi.fn().mockResolvedValue(0),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(402);
+    expect(res.body.error).toMatch(/no premium credits/i);
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("returns 402 when deductCredit fails and Stripe session is not paid", async () => {
+    const mockStripe = {
+      checkout: {
+        sessions: {
+          retrieve: vi.fn().mockResolvedValue({
+            payment_status: "unpaid",
+            id: "cs_unpaid",
+            metadata: { user_login: "alice" },
+          }),
+        },
+      },
+    };
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_unpaid" }),
+      isPaymentsConfigured: () => true,
+      deductCredit: vi.fn().mockResolvedValue(false),
+      awardCredits: vi.fn().mockResolvedValue(undefined),
+      getCredits: vi.fn().mockResolvedValue(0),
+      getStripe: () => mockStripe,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(402);
+    expect(res.body.error).toMatch(/payment required/i);
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("returns 402 when Stripe returns null (not configured) and deductCredit fails", async () => {
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_null" }),
+      isPaymentsConfigured: () => true,
+      deductCredit: vi.fn().mockResolvedValue(false),
+      awardCredits: vi.fn().mockResolvedValue(undefined),
+      getCredits: vi.fn().mockResolvedValue(0),
+      getStripe: () => null,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(402);
+    expect(res.body.error).toMatch(/payment required/i);
+    expect(opts.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it("runs premium pipeline when user has credits (deductCredit returns true)", async () => {
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
+      isPaymentsConfigured: () => true,
+      deductCredit: vi.fn().mockResolvedValue(true),
+      getCredits: vi.fn().mockResolvedValue(4),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ job_id: "job-1", premium: true, credits_remaining: 4 });
+    expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
+    expect(opts.runPipeline).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ premium: true })
+    );
+  });
+
+  it("verifies via Stripe slow path, awards credits, and runs premium pipeline", async () => {
+    const mockAwardCredits = vi.fn().mockResolvedValue(undefined);
+    const deductCreditMock = vi.fn()
+      .mockResolvedValueOnce(false)  // first call: no existing credits
+      .mockResolvedValueOnce(true);  // second call: after award
+    const mockStripe = {
+      checkout: {
+        sessions: {
+          retrieve: vi.fn().mockResolvedValue({
+            payment_status: "paid",
+            id: "cs_new",
+            metadata: { user_login: "carol" },
+          }),
+        },
+      },
+    };
+    const opts = makeOptionsLoggedIn("carol", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_new" }),
+      isPaymentsConfigured: () => true,
+      deductCredit: deductCreditMock,
+      awardCredits: mockAwardCredits,
+      getCredits: vi.fn().mockResolvedValue(0),
+      getStripe: () => mockStripe,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(202);
+    expect(res.body).toMatchObject({ premium: true });
+    expect(mockAwardCredits).toHaveBeenCalledWith("carol", "cs_new");
+    expect(deductCreditMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns 402 when Stripe throws during session retrieval", async () => {
+    const mockStripe = {
+      checkout: {
+        sessions: {
+          retrieve: vi.fn().mockRejectedValue(new Error("Stripe API error")),
+        },
+      },
+    };
+    const opts = makeOptionsLoggedIn("alice", {
+      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_error" }),
+      isPaymentsConfigured: () => true,
+      deductCredit: vi.fn().mockResolvedValue(false),
+      awardCredits: vi.fn().mockResolvedValue(undefined),
+      getCredits: vi.fn().mockResolvedValue(0),
+      getStripe: () => mockStripe,
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(402);
+    expect(res.body.error).toMatch(/payment required/i);
+  });
+});
+
 describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   beforeEach(async () => {
     await clearCreditStore();
