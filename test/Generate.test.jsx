@@ -431,6 +431,39 @@ describe("Generate", () => {
     expect(screen.queryByRole("button", { name: /premium/i })).not.toBeInTheDocument();
     jobResolve({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } });
   });
+
+  it("when generating with no progress text yet, shows progressbar but no progress paragraph", async () => {
+    let jobResolve;
+    const jobHang = new Promise((r) => { jobResolve = r; });
+    let jobCalls = 0;
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate") return Promise.resolve(mockRes({ job_id: "j1" }, true, 202));
+      if (String(url).includes("/api/jobs/")) {
+        jobCalls++;
+        return jobCalls === 1
+          ? Promise.resolve(mockRes({ status: "running" }))
+          : jobHang;
+      }
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    const { container } = render(<Generate />);
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: {
+        value: JSON.stringify({
+          timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+          contributions: [],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("progressbar", { name: /generating review/i })).toBeInTheDocument();
+    });
+    expect(container.querySelector(".generate-progress")).toBeNull();
+    jobResolve({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } });
+  });
 });
 
 describe("pollJob", () => {
