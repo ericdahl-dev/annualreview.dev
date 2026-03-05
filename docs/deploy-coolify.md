@@ -30,5 +30,5 @@ The repo includes `nixpacks.toml` so Nixpacks runs `yarn build` and then `yarn s
 - **Required:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (for the webhook handler; see `server/routes/payments.ts`).
 - **Optional:** `STRIPE_PRICE_CENTS` (default `100`), `STRIPE_CURRENCY` (default `usd`), `CREDITS_PER_PURCHASE` (default `5`) — see `server.ts` and `server/routes/payments.ts`.
 - **Where to set:** Local: `.env` (do not commit). Production: Coolify (or similar) → Environment / secrets.
-- **When payments are active:** Only when `STRIPE_SECRET_KEY` is set **and** the PostHog feature flag `enable-stripe-payments` is on for the user (see `server/routes/payments.ts`, `docs/STRIPE_KEYS.md`).
-- **Verify:** `GET /api/payments/config` returns `enabled: true` when Stripe is configured and the flag is on for that user.
+- **When payments are active:** When `STRIPE_SECRET_KEY` is set (see `server/routes/payments.ts`, `docs/STRIPE_KEYS.md`).
+- **Verify:** `GET /api/payments/config` returns `enabled: true` when Stripe is configured.

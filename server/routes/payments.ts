@@ -10,18 +10,14 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
-import { PostHog } from "posthog-node";
 import Stripe from "stripe";
 import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/run-pipeline.js";
 import { STRIPE_API_VERSION } from "../config.js";
 
-const PAYMENTS_FEATURE_FLAG_KEY = "enable-stripe-payments";
-
 export interface PaymentsRoutesOptions {
   respondJson: (res: ServerResponse, status: number, data: object) => void;
   getStripe?: () => Stripe | null;
-  getPostHog?: () => PostHog | null;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
   /** Optional for tests; when not provided uses real payment store (requires DATABASE_URL). */
@@ -47,43 +43,10 @@ function getStripeClient(): Stripe | null {
   return new Stripe(key, { apiVersion: STRIPE_API_VERSION });
 }
 
-let posthogClient: PostHog | null | undefined;
-function getPostHogClient(): PostHog | null {
-  if (posthogClient !== undefined) return posthogClient;
-  const token = process.env.POSTHOG_API_KEY;
-  if (!token) {
-    posthogClient = null;
-    return posthogClient;
-  }
-  posthogClient = new PostHog(token, {
-    host: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
-  });
-  return posthogClient;
-}
-
-async function isPaymentsEnabledForRequest(
-  req: IncomingMessage,
-  getPostHog: () => PostHog | null,
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null,
-  getSession: (id: string) => SessionData | undefined
-): Promise<boolean> {
-  const posthog = getPostHog();
-  if (!posthog) return false;
-  const sessionId = getSessionIdFromRequest(req);
-  const userSession = sessionId ? getSession(sessionId) : undefined;
-  const distinctId = userSession?.login || "anonymous";
-  try {
-    return !!(await posthog.isFeatureEnabled(PAYMENTS_FEATURE_FLAG_KEY, distinctId));
-  } catch {
-    return false;
-  }
-}
-
 export function paymentsRoutes(options: PaymentsRoutesOptions) {
   const {
     respondJson,
     getStripe = getStripeClient,
-    getPostHog = getPostHogClient,
     getSessionIdFromRequest,
     getSession,
     awardCredits: awardCreditsFn = awardCredits,
@@ -98,14 +61,7 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
     const path = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
 
     if (path === "config" && req.method === "GET") {
-      const stripeConfigured = getStripe() !== null;
-      const flagEnabled = await isPaymentsEnabledForRequest(
-        req,
-        getPostHog,
-        getSessionIdFromRequest,
-        getSession
-      );
-      const enabled = stripeConfigured && flagEnabled;
+      const enabled = getStripe() !== null;
       const { free: freeModel, premium: premiumModel } = getDefaultModels();
       respondJson(res, 200, {
         enabled,
@@ -129,16 +85,6 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
       return;
     }
     if (path === "checkout" && req.method === "POST") {
-      const flagEnabled = await isPaymentsEnabledForRequest(
-        req,
-        getPostHog,
-        getSessionIdFromRequest,
-        getSession
-      );
-      if (!flagEnabled) {
-        respondJson(res, 503, { error: "Payments are currently disabled" });
-        return;
-      }
       const stripe = getStripe();
       if (!stripe) {
         respondJson(res, 503, { error: "Payments not configured (STRIPE_SECRET_KEY missing)" });
