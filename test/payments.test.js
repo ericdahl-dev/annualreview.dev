@@ -102,7 +102,7 @@ describe("paymentsRoutes – checkout", () => {
     const req = mockReq("POST", "/checkout");
     const res = mockRes();
     await new Promise((resolve, reject) => {
-      setTimeout(() => reject(new Error("timeout")), 2000);
+      setTimeout(() => reject(new Error("timeout")), 500);
       const p = handler(req, res, resolve);
       p.catch(reject);
     }).catch(() => {});
@@ -129,6 +129,61 @@ describe("paymentsRoutes – checkout", () => {
     let nextCalled = false;
     await handler(req, res, () => { nextCalled = true; });
     expect(nextCalled).toBe(true);
+  });
+
+  it("returns 401 when user is not logged in", async () => {
+    const mockStripe = { checkout: { sessions: { create: vi.fn() } } };
+    const handler = paymentsRoutes(
+      makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
+    );
+    const req = mockReq("POST", "/checkout");
+    const res = mockRes();
+    await new Promise((resolve) => {
+      const p = handler(req, res, resolve);
+      p.then(resolve).catch(resolve);
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error).toMatch(/login required/i);
+    expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when Stripe throws during session create", async () => {
+    const mockStripe = {
+      checkout: {
+        sessions: {
+          create: vi.fn().mockRejectedValue(new Error("stripe error")),
+        },
+      },
+    };
+    const handler = paymentsRoutes(
+      makeRouteOptions({
+        getStripe: () => /** @type {any} */ (mockStripe),
+        getSessionIdFromRequest: () => "session_1",
+        getSession: () => ({ login: "testuser" }),
+      })
+    );
+    const req = mockReq("POST", "/checkout");
+    const res = mockRes();
+    await new Promise((resolve, reject) => {
+      setTimeout(() => reject(new Error("timeout")), 500);
+      const p = handler(req, res, resolve);
+      p.catch(reject);
+    }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 100));
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toMatch(/stripe error/i);
+  });
+});
+
+describe("paymentsRoutes – credits", () => {
+  it("returns 401 for GET /credits when not logged in", async () => {
+    const handler = paymentsRoutes(makeRouteOptions());
+    const req = mockReq("GET", "/credits");
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error).toMatch(/login required/i);
   });
 });
 
@@ -270,6 +325,35 @@ describe("paymentsRoutes – webhook", () => {
       await new Promise((r) => setTimeout(r, 100));
       expect(res.statusCode).toBe(200);
       expect(res.body).toMatchObject({ received: true });
+    } finally {
+      if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
+      else delete process.env.STRIPE_WEBHOOK_SECRET;
+    }
+  });
+
+  it("returns 400 when constructEvent throws (invalid signature)", async () => {
+    const mockStripe = {
+      webhooks: {
+        constructEvent: vi.fn().mockImplementation(() => {
+          throw new Error("No signatures found matching the expected signature for payload");
+        }),
+      },
+    };
+    const origSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    try {
+      const handler = paymentsRoutes(
+        makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
+      );
+      const req = mockReq("POST", "/webhook", {}, { "stripe-signature": "t=1,v1=bad" });
+      const res = mockRes();
+      await new Promise((resolve) => {
+        const p = handler(req, res, resolve);
+        p.then(resolve).catch(resolve);
+      });
+      await new Promise((r) => setTimeout(r, 100));
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toMatch(/No signatures found/i);
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;

@@ -16,7 +16,7 @@ import type { ValidationResult } from "../../lib/validate-evidence.js";
 import type { Evidence } from "../../types/evidence.js";
 import type { PipelineResult } from "../../lib/run-pipeline.js";
 import type { SessionData } from "../../lib/session-store.js";
-import { awardCredits, deductCredit, getCredits, isCreditStoreConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
+import { awardCredits as defaultAwardCredits, deductCredit as defaultDeductCredit, getCredits as defaultGetCredits, isCreditStoreConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
 import { PAYMENTS_NOT_CONFIGURED } from "../../lib/api-error-codes.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
@@ -40,6 +40,10 @@ export interface GenerateRoutesOptions {
   getStripe?: () => Stripe | null;
   /** Check if payments/DB are configured (injectable for tests). */
   isPaymentsConfigured?: () => boolean;
+  /** Optional injected payment functions (for tests). */
+  deductCredit?: (login: string) => Promise<boolean>;
+  awardCredits?: (login: string, sessionId: string) => Promise<void>;
+  getCredits?: (login: string) => Promise<number>;
 }
 
 type Next = () => void;
@@ -56,7 +60,8 @@ function defaultGetStripe(): Stripe | null {
 async function verifyAndAwardFromStripe(
   stripeSessionId: string,
   expectedUserLogin: string,
-  getStripe: () => Stripe | null
+  getStripe: () => Stripe | null,
+  awardCreditsFn: (login: string, sessionId: string) => Promise<void>
 ): Promise<boolean> {
   const stripe = getStripe();
   if (!stripe) return false;
@@ -66,7 +71,7 @@ async function verifyAndAwardFromStripe(
       session.payment_status === "paid" &&
       session.metadata?.user_login === expectedUserLogin
     ) {
-      await awardCredits(expectedUserLogin, stripeSessionId);
+      await awardCreditsFn(expectedUserLogin, stripeSessionId);
       return true;
     }
   } catch {
@@ -87,6 +92,9 @@ export function generateRoutes(options: GenerateRoutesOptions) {
     getSession,
     getStripe = defaultGetStripe,
     isPaymentsConfigured = defaultIsPaymentsConfigured,
+    deductCredit = defaultDeductCredit,
+    awardCredits = defaultAwardCredits,
+    getCredits = defaultGetCredits,
   } = options;
 
   return async function generateMiddleware(
@@ -146,7 +154,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
 
         if (!debited && stripeSessionId) {
           // Slow path: webhook may not have fired yet — verify directly with Stripe
-          const awarded = await verifyAndAwardFromStripe(stripeSessionId, userLogin, getStripe);
+          const awarded = await verifyAndAwardFromStripe(stripeSessionId, userLogin, getStripe, awardCredits);
           if (!awarded) {
             respondJson(res, 402, { error: "Payment required or session not found" });
             return;
