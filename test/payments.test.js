@@ -185,6 +185,23 @@ describe("paymentsRoutes – credits", () => {
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toMatch(/login required/i);
   });
+
+  it("returns 200 with credits from getCredits when logged in", async () => {
+    const mockGetCredits = vi.fn().mockResolvedValue(3);
+    const handler = paymentsRoutes(
+      makeRouteOptions({
+        getSessionIdFromRequest: () => "sess_1",
+        getSession: () => ({ login: "alice" }),
+        getCredits: mockGetCredits,
+      })
+    );
+    const req = mockReq("GET", "/credits");
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ credits: 3 });
+    expect(mockGetCredits).toHaveBeenCalledWith("alice");
+  });
 });
 
 describe("paymentsRoutes – webhook", () => {
