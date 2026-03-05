@@ -191,6 +191,192 @@ describe("Generate", () => {
     });
     expect(screen.getByRole("button", { name: /1 credits for \$1\.00/i })).toBeInTheDocument();
   });
+
+  it("shows truncated JSON message when paste ends with bracket/comma and no contributions", async () => {
+    render(<Generate />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/auth/me", expect.any(Object)));
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: { value: '{"timeframe":{"start_date":"2025-01-01","end_date":"2025-12-31"},' },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/truncated/i)).toBeInTheDocument();
+    });
+  });
+
+  it("on 200 response without job_id sets result directly", async () => {
+    const directResult = { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: { sections: {} } };
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate") return Promise.resolve(mockRes(directResult, true, 200));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    const evidence = JSON.stringify({
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    });
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), { target: { value: evidence } });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /your review/i })).toBeInTheDocument();
+    });
+  });
+
+  it("updates premium credits when 202 response includes credits_remaining", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: true, credits_per_purchase: 1, price_cents: 100 }));
+      if (String(url) === "/api/generate")
+        return Promise.resolve(mockRes({ job_id: "j1", premium: true, credits_remaining: 2 }, true, 202));
+      if (String(url).includes("/api/jobs/")) return Promise.resolve(mockRes({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } }));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: { value: JSON.stringify({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] }) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /your review/i })).toBeInTheDocument();
+    });
+    expect(screen.getByText(/2 credits left/i)).toBeInTheDocument();
+  });
+
+  it("Upgrade to premium with invalid evidence shows load evidence message", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: true, credits_per_purchase: 1, price_cents: 100 }));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /upgrade to premium/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /upgrade to premium/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/load your evidence data first/i)).toBeInTheDocument();
+    });
+  });
+
+  it("file upload sets evidence text", async () => {
+    const content = JSON.stringify({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] });
+    const file = new File([content], "evidence.json", { type: "application/json" });
+    class MockFileReader {
+      result = null;
+      onload = null;
+      readAsText(blob) {
+        const text = blob instanceof File ? content : "";
+        queueMicrotask(() => {
+          this.result = text;
+          this.onload?.();
+        });
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader);
+    render(<Generate />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/auth/me", expect.any(Object)));
+    const input = document.querySelector('input[type="file"]');
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      const textarea = screen.getByPlaceholderText(/timeframe.*contributions/);
+      expect(textarea.value).toContain("2025-01-01");
+      expect(textarea.value).toContain("contributions");
+    });
+  });
+
+  it("Try sample shows error when fetch fails", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      const s = String(url);
+      if (s.includes("/api/auth/me")) return Promise.resolve(mockRes({}, false, 401));
+      if (s.includes("/api/payments/config")) return Promise.resolve(mockRes({ enabled: false }));
+      // Any other URL → 404 (don't use mockRes with "" as it does JSON.parse)
+      return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve(""), json: () => Promise.resolve({}) });
+    });
+    render(<Generate />);
+    fireEvent.click(screen.getByRole("button", { name: /try sample/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Sample not found \(404\)/)).toBeInTheDocument();
+    });
+  });
+
+  it("Download .md after generate creates download link", async () => {
+    const result = { themes: { themes: [] }, bullets: { bullets_by_theme: [], top_10_bullets_overall: [] }, stories: { stories: [] }, self_eval: { sections: { summary: { text: "Done" } } } };
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate") return Promise.resolve(mockRes(result, true, 200));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    const createObjectURL = vi.fn(() => "blob:mock");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    render(<Generate />);
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: { value: JSON.stringify({ timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" }, contributions: [] }) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /download \.md/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /download \.md/i }));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+  });
+
+  it("Log out calls logout and clears signed-in state", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({ login: "bob" }));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/auth/logout") return Promise.resolve(mockRes({}));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    await waitFor(() => expect(screen.getByText("bob")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /log out/i }));
+    await waitFor(() => {
+      expect(screen.queryByText("bob")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows auth error when URL has error=auth_failed", async () => {
+    const loc = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        search: "?error=auth_failed",
+        pathname: "/generate",
+        origin: loc.origin,
+        replaceState: vi.fn(),
+        href: loc.href,
+        assign: loc.assign,
+        reload: loc.reload,
+      },
+    });
+    render(<Generate />);
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/sign-in.*complete|callback URL/i);
+    });
+  });
+
+  it("Use the terminal tab shows terminal instructions", async () => {
+    render(<Generate />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/auth/me", expect.any(Object)));
+    fireEvent.click(screen.getByRole("tab", { name: /use the terminal/i }));
+    expect(screen.getByRole("heading", { name: /use the terminal/i })).toBeInTheDocument();
+    expect(screen.getByText(/GITHUB_TOKEN=ghp_your_token/)).toBeInTheDocument();
+  });
+
+  it("displays formatted model names when payments config includes free_model and premium_model", async () => {
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config")
+        return Promise.resolve(mockRes({ enabled: true, free_model: "anthropic/claude-3.5-sonnet", premium_model: "openai/gpt-4o-mini", credits_per_purchase: 1, price_cents: 100 }));
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    await waitFor(() => {
+      expect(screen.getByText(/Claude 3\.5 Sonnet/i)).toBeInTheDocument();
+      expect(screen.getByText(/GPT 4o Mini/i)).toBeInTheDocument();
+    });
+  });
 });
 
 describe("pollJob", () => {

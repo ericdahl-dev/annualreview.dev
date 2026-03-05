@@ -228,7 +228,7 @@ describe("paymentsRoutes – webhook", () => {
   });
 
   it.skipIf(!process.env.DATABASE_URL)("awards credits on checkout.session.completed when payment_status is paid", async () => {
-    const { clearCreditStore, getCredits } = await import("../lib/payment-store.ts");
+    const { clearCreditStore, getCredits, getCreditsPerPurchase } = await import("../lib/payment-store.ts");
     await clearCreditStore();
     const stripeEvent = {
       type: "checkout.session.completed",
@@ -251,14 +251,11 @@ describe("paymentsRoutes – webhook", () => {
       );
       const req = mockReq("POST", "/webhook", {}, { "stripe-signature": "t=1,v1=abc" });
       const res = mockRes();
-      await new Promise((resolve) => {
-        const p = handler(req, res, resolve);
-        p.then(resolve).catch(resolve);
-      });
-      await new Promise((r) => setTimeout(r, 100));
+      await handler(req, res, () => {});
       expect(res.statusCode).toBe(200);
       expect(res.body).toMatchObject({ received: true });
-      expect(await getCredits("alice")).toBe(1);
+      const expectedCredits = getCreditsPerPurchase();
+      expect(await getCredits("alice")).toBe(expectedCredits);
     } finally {
       if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
       else delete process.env.STRIPE_WEBHOOK_SECRET;

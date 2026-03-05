@@ -458,7 +458,6 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
   });
 
   it("strips _stripe_session_id and _premium from evidence before pipeline", async () => {
-    await awardCredits("grace", "cs_grace");
     let capturedEvidence = null;
     const opts = makeOptionsLoggedIn("grace", {
       readJsonBody: vi.fn().mockResolvedValue({
@@ -466,12 +465,14 @@ describe.skipIf(!hasDb)("generateRoutes – premium flag", () => {
         _stripe_session_id: "cs_grace",
         _premium: true,
       }),
+      deductCredit: vi.fn().mockResolvedValue(true),
       runPipeline: vi.fn((ev) => {
         capturedEvidence = ev;
         return Promise.resolve({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
       }),
     });
     await generateRoutes(opts)({ method: "POST", url: "/" }, mockRes(), () => {});
+    expect(capturedEvidence).toBeDefined();
     expect(capturedEvidence).not.toHaveProperty("_stripe_session_id");
     expect(capturedEvidence).not.toHaveProperty("_premium");
   });
