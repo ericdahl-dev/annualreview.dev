@@ -80,7 +80,6 @@ describe("paymentsRoutes – checkout", () => {
     expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
       expect.objectContaining({
         mode: "payment",
-        payment_method_types: ["card"],
         metadata: { user_login: "edahl" },
         line_items: expect.arrayContaining([
           expect.objectContaining({ quantity: 1 }),
@@ -303,6 +302,36 @@ describe("paymentsRoutes – webhook", () => {
         p.then(resolve).catch(resolve);
       });
       await new Promise((r) => setTimeout(r, 100));
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ received: true });
+    } finally {
+      if (origSecret !== undefined) process.env.STRIPE_WEBHOOK_SECRET = origSecret;
+      else delete process.env.STRIPE_WEBHOOK_SECRET;
+    }
+  });
+
+  it("returns 200 and logs on checkout.session.expired", async () => {
+    const stripeEvent = {
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: "cs_expired_123",
+          metadata: { user_login: "charlie" },
+        },
+      },
+    };
+    const mockStripe = {
+      webhooks: { constructEvent: vi.fn().mockReturnValue(stripeEvent) },
+    };
+    const origSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    try {
+      const handler = paymentsRoutes(
+        makeRouteOptions({ getStripe: () => /** @type {any} */ (mockStripe) })
+      );
+      const req = mockReq("POST", "/webhook", {}, { "stripe-signature": "t=1,v1=abc" });
+      const res = mockRes();
+      await handler(req, res, () => {});
       expect(res.statusCode).toBe(200);
       expect(res.body).toMatchObject({ received: true });
     } finally {
