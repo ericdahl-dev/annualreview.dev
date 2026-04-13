@@ -67,7 +67,7 @@ export function collectRoutes(options: CollectRoutesOptions) {
       }
       const sessionId = getSessionIdFromRequest(req);
       const session = sessionId ? getSession(sessionId) : undefined;
-      const token = session?.access_token ?? body.token;
+      const token = body.token ?? session?.access_token;
       if (!token || typeof token !== "string") {
         respondJson(res, 401, {
           error: "token required (sign in with GitHub or send token in body)",
