@@ -32,6 +32,12 @@ function makeOptionsLoggedIn(login, overrides = {}) {
   return makeOptions({
     getSessionIdFromRequest: vi.fn().mockReturnValue("sess_test"),
     getSession: vi.fn().mockReturnValue({ login, access_token: "tok", created_at: "2025-01-01" }),
+    // Payment functions default to "configured but no credits" so tests that don't
+    // explicitly care about the payment layer still work without DATABASE_URL.
+    isPaymentsConfigured: () => true,
+    deductCredit: vi.fn().mockResolvedValue(false),
+    getCredits: vi.fn().mockResolvedValue(0),
+    awardCredits: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   });
 }
@@ -310,6 +316,7 @@ describe("generateRoutes – premium flag", () => {
   it("returns 401 when requesting premium but not logged in", async () => {
     const opts = makeOptions({
       readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_test" }),
+      isPaymentsConfigured: () => true,
     });
     const handler = generateRoutes(opts);
     const req = { method: "POST", url: "/" };
@@ -473,5 +480,58 @@ describe("generateRoutes – premium flag", () => {
     expect(capturedEvidence).toBeDefined();
     expect(capturedEvidence).not.toHaveProperty("_stripe_session_id");
     expect(capturedEvidence).not.toHaveProperty("_premium");
+  });
+
+  it("forwards posthog_distinct_id and posthog_trace_id to runPipeline", async () => {
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockResolvedValue({
+        ...validEvidence,
+        posthog_distinct_id: "ph_user_123",
+        posthog_trace_id: "trace-abc-456",
+      }),
+    });
+    const handler = generateRoutes(opts);
+    const res = mockRes();
+    await handler({ method: "POST", url: "/" }, res, () => {});
+    expect(res.statusCode).toBe(202);
+    expect(opts.runPipeline).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        posthogDistinctId: "ph_user_123",
+        posthogTraceId: "trace-abc-456",
+      })
+    );
+  });
+
+  it("strips posthog_distinct_id and posthog_trace_id from evidence before validation", async () => {
+    let capturedEvidence = null;
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockResolvedValue({
+        ...validEvidence,
+        posthog_distinct_id: "ph_user_123",
+        posthog_trace_id: "trace-abc-456",
+      }),
+      runPipeline: vi.fn((ev) => {
+        capturedEvidence = ev;
+        return Promise.resolve({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
+      }),
+    });
+    await generateRoutes(opts)({ method: "POST", url: "/" }, mockRes(), () => {});
+    expect(capturedEvidence).toBeDefined();
+    expect(capturedEvidence).not.toHaveProperty("posthog_distinct_id");
+    expect(capturedEvidence).not.toHaveProperty("posthog_trace_id");
+  });
+
+  it("omits posthogDistinctId and posthogTraceId from runPipeline when not provided", async () => {
+    const opts = makeOptions();
+    const handler = generateRoutes(opts);
+    await handler({ method: "POST", url: "/" }, mockRes(), () => {});
+    expect(opts.runPipeline).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({
+        posthogDistinctId: expect.anything(),
+        posthogTraceId: expect.anything(),
+      })
+    );
   });
 });

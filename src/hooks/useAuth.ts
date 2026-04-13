@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { posthog } from "../posthog.js";
+import { posthog } from "../posthog";
 
 export interface AuthUser {
   login: string;
@@ -25,7 +25,10 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(
-      () => setUser(null)
+      () => {
+        setUser(null);
+        try { posthog?.reset(); } catch { /* non-critical */ }
+      }
     );
   }, []);
 
