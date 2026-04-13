@@ -32,7 +32,7 @@ export interface GenerateRoutesOptions {
   ) => void;
   runPipeline: (
     evidence: Evidence,
-    opts: { onProgress: (data: { stepIndex: number; total: number; label: string }) => void; premium?: boolean }
+    opts: { onProgress: (data: { stepIndex: number; total: number; label: string }) => void; premium?: boolean; posthogDistinctId?: string; posthogTraceId?: string }
   ) => Promise<PipelineResult>;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
@@ -113,10 +113,14 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       const {
         _stripe_session_id: rawSessionId,
         _premium: rawPremium,
+        posthog_distinct_id: rawPosthogDistinctId,
+        posthog_trace_id: rawPosthogTraceId,
         ...evidence
       } = body as Record<string, unknown>;
       const stripeSessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
       const wantsPremium = !!rawPremium || !!stripeSessionId;
+      const posthogDistinctId = typeof rawPosthogDistinctId === "string" ? rawPosthogDistinctId : undefined;
+      const posthogTraceId = typeof rawPosthogTraceId === "string" ? rawPosthogTraceId : undefined;
 
       const validation = validateEvidence(evidence);
       if (!validation.valid) {
@@ -174,6 +178,8 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       runInBackground(jobId, (report) =>
         runPipeline(evidence as unknown as Evidence, {
           premium,
+          posthogDistinctId,
+          posthogTraceId,
           onProgress: ({ stepIndex, total, label }) =>
             report({ progress: `${stepIndex}/${total} ${label}` }),
         })
