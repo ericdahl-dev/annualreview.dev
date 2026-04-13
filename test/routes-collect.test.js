@@ -77,6 +77,25 @@ describe("collectRoutes – POST /", () => {
     expect(opts.createJob).toHaveBeenCalledWith("collect", "sess_1");
   });
 
+  it("prefers body token over session token when both are provided", async () => {
+    const collectAndNormalize = vi.fn().mockResolvedValue({ contributions: [] });
+    const opts = makeOptions({
+      readJsonBody: vi.fn().mockResolvedValue({ start_date: "2025-01-01", end_date: "2025-12-31", token: "ghp_pat_token" }),
+      getSessionIdFromRequest: () => "sess_1",
+      getSession: () => ({ access_token: "ghp_session_token", login: "user1" }),
+      collectAndNormalize,
+    });
+    const handler = collectRoutes(opts);
+    const req = mockReq("POST", "/");
+    const res = mockRes();
+    await handler(req, res, () => {});
+    expect(res.statusCode).toBe(202);
+    // The background job should eventually call collectAndNormalize with the PAT, not the session token
+    const bgFn = opts.runInBackground.mock.calls[0][1];
+    await bgFn();
+    expect(collectAndNormalize).toHaveBeenCalledWith(expect.objectContaining({ token: "ghp_pat_token" }));
+  });
+
   it("returns 401 when readJsonBody throws a 401 error message", async () => {
     const opts = makeOptions({
       readJsonBody: vi.fn().mockRejectedValue(new Error("GitHub 401: Bad credentials")),
