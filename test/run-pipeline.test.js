@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { extractJson, runPipeline, clearPipelineCache, getMaxUserTokensForTier } from "../lib/run-pipeline.js";
+import { extractJson, runPipeline, clearPipelineCache, getMaxUserTokensForTier, PipelineCache } from "../lib/run-pipeline.js";
 
 const mockThemes = { themes: [{ theme_id: "t1", theme_name: "Reliability" }] };
 const mockBullets = { bullets_by_theme: [], top_10_bullets_overall: [] };
@@ -323,6 +323,23 @@ describe("runPipeline", () => {
     };
     const result = await runPipeline(evidence, { apiKey: "sk-test" });
     expect(result.themes).toBeDefined();
+  });
+
+  it("injectable PipelineCache isolates cache state between test instances", async () => {
+    const cache1 = new PipelineCache();
+    const cache2 = new PipelineCache();
+    const evidence = {
+      timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+      contributions: [],
+    };
+    await runPipeline(evidence, { apiKey: "sk-test", cache: cache1 });
+    const callsAfterFirst = createCallCount;
+    await runPipeline(evidence, { apiKey: "sk-test", cache: cache2 });
+    // cache2 is fresh — should call LLM again
+    expect(createCallCount).toBe(callsAfterFirst + 4);
+    await runPipeline(evidence, { apiKey: "sk-test", cache: cache1 });
+    // cache1 hit — no more calls
+    expect(createCallCount).toBe(callsAfterFirst + 4);
   });
 
   it("throws step-specific error when LLM returns malformed JSON for a step", async () => {

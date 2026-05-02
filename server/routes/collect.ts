@@ -5,11 +5,9 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
+import { readJsonBody, respondJson, DATE_YYYY_MM_DD } from "../helpers.js";
 
 export interface CollectRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
-  DATE_YYYY_MM_DD: RegExp;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
   createJob: (type: string, sessionId?: string) => string;
@@ -28,9 +26,6 @@ type Next = () => void;
 
 export function collectRoutes(options: CollectRoutesOptions) {
   const {
-    readJsonBody,
-    respondJson,
-    DATE_YYYY_MM_DD,
     getSessionIdFromRequest,
     getSession,
     createJob,
@@ -67,7 +62,7 @@ export function collectRoutes(options: CollectRoutesOptions) {
       }
       const sessionId = getSessionIdFromRequest(req);
       const session = sessionId ? getSession(sessionId) : undefined;
-      const token = session?.access_token ?? body.token;
+      const token = body.token ?? session?.access_token;
       if (!token || typeof token !== "string") {
         respondJson(res, 401, {
           error: "token required (sign in with GitHub or send token in body)",

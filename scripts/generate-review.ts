@@ -142,9 +142,7 @@ export async function runGenerateReview(
     JSON.stringify(self_eval, null, 2)
   );
   const markdown = generateMarkdown(
-    { themes, bullets, stories, self_eval } as Parameters<
-      typeof generateMarkdown
-    >[0],
+    { themes, bullets, stories, self_eval },
     { timeframe: evidence.timeframe }
   );
   writeFileSync(join(outDir, "report.md"), markdown);
