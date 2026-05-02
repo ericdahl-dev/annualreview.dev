@@ -9,10 +9,12 @@ export interface SessionData {
   created_at: string;
 }
 
+import { generateId } from "./id.js";
+
 const sessions = new Map<string, SessionData>();
 
 export function createSession(data: Omit<SessionData, "created_at">): string {
-  const id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  const id = generateId("sess");
   sessions.set(id, {
     ...data,
     created_at: new Date().toISOString(),

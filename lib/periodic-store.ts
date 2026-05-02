@@ -17,6 +17,7 @@
 
 import type { Pool } from "pg";
 import type { Evidence } from "../types/evidence.js";
+import { generateId } from "./id.js";
 
 export type PeriodType = "daily" | "weekly" | "monthly";
 
@@ -123,7 +124,7 @@ export async function saveDailySummary(
   summary: string
 ): Promise<string> {
   const db = await getPool();
-  const id = `pday_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const id = generateId("pday");
   const createdAt = new Date().toISOString();
   const contributionCount = Array.isArray(evidence.contributions)
     ? evidence.contributions.length
@@ -167,7 +168,7 @@ export async function saveWeeklyRollup(
   totalContributions: number
 ): Promise<string> {
   const db = await getPool();
-  const id = `pwk_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const id = generateId("pwk");
   const createdAt = new Date().toISOString();
   const key = toWeekKey(weekStartDate);
   const end = weekEnd(weekStartDate);
@@ -210,7 +211,7 @@ export async function saveMonthlyRollup(
   totalContributions: number
 ): Promise<string> {
   const db = await getPool();
-  const id = `pmo_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const id = generateId("pmo");
   const createdAt = new Date().toISOString();
   const startDate = `${month}-01`;
   // Last day of the month
