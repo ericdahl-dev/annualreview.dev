@@ -14,9 +14,9 @@ import Stripe from "stripe";
 import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/run-pipeline.js";
 import { STRIPE_API_VERSION } from "../config.js";
+import { respondJson } from "../helpers.js";
 
 export interface PaymentsRoutesOptions {
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
   getStripe?: () => Stripe | null;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
@@ -45,7 +45,6 @@ function getStripeClient(): Stripe | null {
 
 export function paymentsRoutes(options: PaymentsRoutesOptions) {
   const {
-    respondJson,
     getStripe = getStripeClient,
     getSessionIdFromRequest,
     getSession,

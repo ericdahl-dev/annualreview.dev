@@ -15,10 +15,11 @@ import type {
   SnapshotWithEvidence,
   SnapshotPeriod,
 } from "../../lib/snapshot-store.js";
+import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
 
 export interface SnapshotsRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
+  /** Injected in tests; defaults to streaming JSON from the request. */
+  readJsonBody?: (req: IncomingMessage) => Promise<object>;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
   /** Injected for tests; defaults to real snapshot-store functions when not provided. */
@@ -44,11 +45,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
   const {
-    readJsonBody,
-    respondJson,
     getSessionIdFromRequest,
     getSession,
   } = options;
+  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
 
   return async function snapshotsMiddleware(
     req: IncomingMessage,

@@ -5,11 +5,9 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
+import { readJsonBody, respondJson, DATE_YYYY_MM_DD } from "../helpers.js";
 
 export interface CollectRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
-  DATE_YYYY_MM_DD: RegExp;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
   createJob: (type: string, sessionId?: string) => string;
@@ -28,9 +26,6 @@ type Next = () => void;
 
 export function collectRoutes(options: CollectRoutesOptions) {
   const {
-    readJsonBody,
-    respondJson,
-    DATE_YYYY_MM_DD,
     getSessionIdFromRequest,
     getSession,
     createJob,

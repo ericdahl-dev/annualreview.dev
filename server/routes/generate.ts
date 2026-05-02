@@ -20,10 +20,11 @@ import { awardCredits as defaultAwardCredits, deductCredit as defaultDeductCredi
 import { PAYMENTS_NOT_CONFIGURED } from "../../lib/api-error-codes.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
+import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
 
 export interface GenerateRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
+  /** Injected in tests; defaults to streaming JSON from the request. */
+  readJsonBody?: (req: IncomingMessage) => Promise<object>;
   validateEvidence: (evidence: unknown) => ValidationResult;
   createJob: (type: string, sessionId?: string) => string;
   runInBackground: (
@@ -82,8 +83,6 @@ async function verifyAndAwardFromStripe(
 
 export function generateRoutes(options: GenerateRoutesOptions) {
   const {
-    readJsonBody,
-    respondJson,
     validateEvidence,
     createJob,
     runInBackground,
@@ -96,6 +95,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
     awardCredits = defaultAwardCredits,
     getCredits = defaultGetCredits,
   } = options;
+  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
 
   return async function generateMiddleware(
     req: IncomingMessage,
