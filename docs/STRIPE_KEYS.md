@@ -15,9 +15,20 @@ The app uses Stripe for premium report purchases. You need two keys from your St
 - **Env var:** `STRIPE_WEBHOOK_SECRET`
 - **Where:** [Webhooks](https://dashboard.stripe.com/webhooks) → Add endpoint (or open existing) → “Reveal” signing secret.
 - **Endpoint URL (production):** `https://annualreview.dev/api/payments/webhook`
-- The server uses this to verify `checkout.session.completed` and award credits. Register **`checkout.session.completed`** and **`checkout.session.expired`** in your Stripe webhook endpoint configuration.
+- Register every event type listed under **[Webhook events to register](#webhook-events-to-register)** (below) on your Stripe webhook endpoint.
 - Value starts with `whsec_`. Set it in env/secrets (e.g. Coolify) for production; do not commit.
 - **Detailed steps (including local testing):** [stripe-webhooks.md](stripe-webhooks.md).
+
+## Webhook events to register
+
+**Canonical list** for the Stripe Dashboard — other docs (e.g. [stripe-webhooks.md](stripe-webhooks.md)) link here instead of duplicating.
+
+| Event | App behavior |
+|-------|----------------|
+| `checkout.session.completed` | **Required.** Verifies signature, then awards premium credits when `payment_status` is `paid` and session `metadata.user_login` matches the GitHub login stored at checkout. |
+| `checkout.session.expired` | **Recommended.** Logged server-side; returns `200` with no credit mutation. |
+
+**Settlement policy:** Production should use **instant-settlement** payment methods only (see [CONTEXT.md](../CONTEXT.md)). This app does **not** handle `checkout.session.async_payment_succeeded`; delayed-settlement methods can leave buyers without credits until that is implemented.
 
 ## Optional
 

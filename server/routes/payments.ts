@@ -2,7 +2,7 @@
  * Payments API:
  *   GET  /config   – returns { enabled: boolean } so the frontend knows whether payments are configured
  *   POST /checkout  – create Stripe Checkout session for premium report ($1)
- *   POST /webhook   – handle Stripe webhook events (mark sessions as paid)
+ *   POST /webhook   – handle Stripe webhook events (verify signature; award credits on paid checkout)
  *
  * Required env vars: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (webhook only).
  * Optional: STRIPE_PRICE_CENTS (default 100 = $1.00), STRIPE_CURRENCY (default "usd").
