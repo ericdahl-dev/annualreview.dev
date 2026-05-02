@@ -12,6 +12,7 @@ import { OpenAI as PostHogOpenAI } from "@posthog/ai/openai";
 import { PostHog } from "posthog-node";
 import { fitEvidenceToBudget, estimateTokens, slimContributions } from "./context-budget.js";
 import type { Evidence } from "../types/evidence.js";
+import type { ThemesOutput, BulletsOutput, StoriesOutput, SelfEvalOutput } from "./generate-markdown.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = join(__dirname, "..", "prompts");
@@ -45,21 +46,21 @@ export function extractJson(text: string): unknown {
 
 /** Collect all evidence ids referenced in themes and bullets (and optional stories). */
 function collectEvidenceIds(
-  themes: Record<string, unknown> | null,
-  bullets: Record<string, unknown> | null,
-  stories: Record<string, unknown> | null = null
+  themes: ThemesOutput | null,
+  bullets: BulletsOutput | null,
+  stories: StoriesOutput | null = null
 ): Set<string> {
   const ids = new Set<string>();
-  for (const theme of (themes as { themes?: Array<{ evidence_ids?: string[]; anchor_evidence?: Array<{ id?: string }> }> })?.themes ?? []) {
+  for (const theme of themes?.themes ?? []) {
     for (const id of theme.evidence_ids ?? []) ids.add(id);
     for (const anchor of theme.anchor_evidence ?? []) if (anchor?.id) ids.add(anchor.id);
   }
-  for (const bulletGroup of (bullets as { bullets_by_theme?: Array<{ bullets?: Array<{ evidence?: Array<{ id?: string }> }> }> })?.bullets_by_theme ?? []) {
+  for (const bulletGroup of bullets?.bullets_by_theme ?? []) {
     for (const bullet of bulletGroup.bullets ?? []) {
       for (const evidenceItem of bullet.evidence ?? []) if (evidenceItem?.id) ids.add(evidenceItem.id);
     }
   }
-  for (const story of (stories as { stories?: Array<{ evidence?: Array<{ id?: string }> }> })?.stories ?? []) {
+  for (const story of stories?.stories ?? []) {
     for (const evidenceItem of story.evidence ?? []) if (evidenceItem?.id) ids.add(evidenceItem.id);
   }
   return ids;
@@ -78,11 +79,18 @@ function contributionsForPayload(
   return slimContributions(subset, opts);
 }
 
+type PartialPipelineResult = {
+  themes?: ThemesOutput;
+  bullets?: BulletsOutput;
+  stories?: StoriesOutput;
+  self_eval?: SelfEvalOutput;
+};
+
 interface PipelineStep {
   key: string;
   label: string;
   promptFile: string;
-  buildInput: (evidence: Evidence, prev: Record<string, unknown>) => string;
+  buildInput: (evidence: Evidence, prev: PartialPipelineResult) => string;
 }
 
 /** Declarative pipeline steps: key, label, prompt file, and buildInput(evidence, previousResults). */
@@ -118,8 +126,8 @@ const STEPS: PipelineStep[] = [
     promptFile: "30_star_stories.md",
     buildInput(evidence, prev) {
       const ids = collectEvidenceIds(
-        prev.themes as Record<string, unknown>,
-        prev.bullets as Record<string, unknown>
+        prev.themes ?? null,
+        prev.bullets ?? null
       );
       const contribs = contributionsForPayload(evidence.contributions, ids, { bodyChars: 300, summaryChars: 400 });
       return JSON.stringify(
@@ -127,7 +135,7 @@ const STEPS: PipelineStep[] = [
           timeframe: evidence.timeframe,
           goals: evidence.goals,
           themes: prev.themes,
-          bullets_by_theme: (prev.bullets as { bullets_by_theme?: unknown })?.bullets_by_theme,
+          bullets_by_theme: prev.bullets?.bullets_by_theme,
           contributions: contribs,
         },
         null,
@@ -141,9 +149,9 @@ const STEPS: PipelineStep[] = [
     promptFile: "40_self_eval_sections.md",
     buildInput(evidence, prev) {
       const ids = collectEvidenceIds(
-        prev.themes as Record<string, unknown>,
-        prev.bullets as Record<string, unknown>,
-        prev.stories as Record<string, unknown>
+        prev.themes ?? null,
+        prev.bullets ?? null,
+        prev.stories ?? null
       );
       const contribs = contributionsForPayload(evidence.contributions, ids, { minimal: true });
       return JSON.stringify(
@@ -152,8 +160,8 @@ const STEPS: PipelineStep[] = [
           goals: evidence.goals,
           role_context_optional: evidence.role_context_optional,
           themes: prev.themes,
-          top_10_bullets_overall: (prev.bullets as { top_10_bullets_overall?: unknown[] })?.top_10_bullets_overall ?? [],
-          stories: (prev.stories as { stories?: unknown[] })?.stories ?? [],
+          top_10_bullets_overall: prev.bullets?.top_10_bullets_overall ?? [],
+          stories: prev.stories?.stories ?? [],
           contributions: contribs,
         },
         null,
@@ -164,10 +172,10 @@ const STEPS: PipelineStep[] = [
 ];
 
 export interface PipelineResult {
-  themes: unknown;
-  bullets: unknown;
-  stories: unknown;
-  self_eval: unknown;
+  themes: ThemesOutput;
+  bullets: BulletsOutput;
+  stories: StoriesOutput;
+  self_eval: SelfEvalOutput;
 }
 
 export interface PipelineOptions {
@@ -291,7 +299,7 @@ export async function runPipeline(
   const maxUserTokens = getMaxUserTokensForTier(premium);
   evidence = fitEvidenceToBudget(evidence, (ev) => STEPS[0].buildInput(ev, {}), maxUserTokens);
 
-  const previousResults: Record<string, unknown> = {};
+  const previousResults: PartialPipelineResult = {};
   let prevStepMs: number | undefined;
   let prevStepPayloadTokens: number | undefined;
 
@@ -321,7 +329,7 @@ export async function runPipeline(
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Step ${step.key} returned invalid JSON: ${msg}`);
     }
-    previousResults[step.key] = stepResult;
+    (previousResults as Record<string, unknown>)[step.key] = stepResult;
     prevStepMs = Date.now() - stepStart;
     prevStepPayloadTokens = estimateTokens(input);
   }
@@ -329,10 +337,10 @@ export async function runPipeline(
   progress(total, undefined, { prevStepMs, prevStepPayloadTokens, totalMs: Date.now() - totalStart });
 
   const result: PipelineResult = {
-    themes: previousResults.themes,
-    bullets: previousResults.bullets,
-    stories: previousResults.stories,
-    self_eval: previousResults.self_eval,
+    themes: previousResults.themes as ThemesOutput,
+    bullets: previousResults.bullets as BulletsOutput,
+    stories: previousResults.stories as StoriesOutput,
+    self_eval: previousResults.self_eval as SelfEvalOutput,
   };
   if (resultCache.size >= RESULT_CACHE_MAX) {
     const firstKey = resultCache.keys().next().value;
