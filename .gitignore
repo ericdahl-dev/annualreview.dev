@@ -22,3 +22,7 @@ test-report.junit.xml
 .eslintcache
 *.tsbuildinfo
 *.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
