@@ -58,6 +58,7 @@ import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
 import { snapshotsRoutes } from "./server/routes/snapshots.ts";
+import { periodicRoutes } from "./server/routes/periodic.ts";
 import { getSessionSecret } from "./server/session-secret.ts";
 
 const MIME: Record<string, string> = {
@@ -227,7 +228,19 @@ function handleRequest(
       })(wrappedReq, res, next);
       return;
     }
+    if (routeArea === "periodic") {
+      periodicRoutes({
+        readJsonBody,
+        respondJson,
+        getSessionIdFromRequest: getSessionId,
+        getSession,
+        collectAndNormalize,
+      })(wrappedReq, res, next);
+      return;
+    }
   }
+
+  serveStatic(res, pathname);
 }
 
 const port = Number(process.env.PORT) || 3000;

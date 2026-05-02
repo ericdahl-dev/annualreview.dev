@@ -48,6 +48,7 @@ import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
 import { snapshotsRoutes } from "./server/routes/snapshots.ts";
+import { periodicRoutes } from "./server/routes/periodic.ts";
 
 function apiRoutesPlugin() {
   return {
@@ -184,6 +185,17 @@ function apiRoutesPlugin() {
           respondJson,
           getSessionIdFromRequest: getSessionId,
           getSession,
+        })
+      );
+
+      server.middlewares.use(
+        "/api/periodic",
+        periodicRoutes({
+          readJsonBody,
+          respondJson,
+          getSessionIdFromRequest: getSessionId,
+          getSession,
+          collectAndNormalize,
         })
       );
     },

@@ -293,7 +293,92 @@
   gap: 0.5rem;
 }
 
-/* ─── Error / loading ─── */
+/* ─── Action bar ─── */
+
+.dashboard-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.dashboard-action-success {
+  background: rgba(129, 201, 149, 0.1);
+  border: 1px solid rgba(129, 201, 149, 0.3);
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  color: #81c995;
+  margin-bottom: 1rem;
+}
+
+/* ─── Sections ─── */
+
+.dashboard-section {
+  margin-bottom: 2rem;
+}
+
+.dashboard-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dashboard-section-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.07);
+  color: var(--text-muted);
+}
+
+.dashboard-section-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ─── Summary cards ─── */
+
+.dashboard-summary-headline {
+  margin: 0.35rem 0 0.1rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.dashboard-summary-bullets {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.dashboard-summary-bullets li {
+  margin-bottom: 0.2rem;
+}
+
+.dashboard-expand-btn {
+  margin-top: 0.4rem;
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+/* ─── Error ─── */
 
 .dashboard-error {
   background: rgba(224, 82, 82, 0.08);

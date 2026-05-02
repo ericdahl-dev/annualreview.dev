@@ -165,14 +165,13 @@ export async function mergeSnapshots(
   if (ids.length === 0) return null;
   const db = await getPool();
 
-  // Use a parameterized ANY query to fetch in one round-trip
-  const placeholders = ids.map((_, i) => `$${i + 2}`).join(", ");
+  // Use ANY($2::text[]) to pass the ids array as a single parameter
   const result = await db.query<{ evidence: Evidence; start_date: string; end_date: string }>(
     `SELECT evidence, start_date, end_date
      FROM contribution_snapshots
-     WHERE user_login = $1 AND id = ANY(ARRAY[${placeholders}]::text[])
+     WHERE user_login = $1 AND id = ANY($2::text[])
      ORDER BY start_date ASC`,
-    [userLogin, ...ids]
+    [userLogin, ids]
   );
 
   if (result.rows.length === 0) return null;
