@@ -113,6 +113,7 @@ interface GraphQLReviewNode {
   state: string | null;
   submittedAt: string | null;
   url: string | null;
+  author?: { login?: string } | null;
 }
 
 function mapGraphQLPrToRaw(node: GraphQLPrNode): RawPr {
@@ -230,6 +231,72 @@ export async function collectRawGraphQL({
     if (!hasNext) break;
     cursor = search.pageInfo?.endCursor ?? null;
     if (!cursor) break;
+  }
+
+  // Second pass: collect reviews submitted by the user on other people's PRs.
+  // This covers contributions in both personal and org repos that would be missed
+  // by the author-only search above.
+  if (!noReviews) {
+    const reviewedPrQuery = `reviewed-by:${login} -author:${login} type:pr updated:${start}..${end}`;
+    let reviewedCursor: string | null = null;
+    const startTs = new Date(start + "T00:00:00Z").getTime();
+    const endTs = new Date(end + "T23:59:59Z").getTime();
+
+    const submittedReviewsSearchQuery = `
+      query($q: String!, $after: String) {
+        search(query: $q, type: ISSUE, first: ${SEARCH_PR_PAGE_SIZE}, after: $after) {
+          edges {
+            node {
+              __typename
+              ... on PullRequest {
+                number
+                baseRepository { nameWithOwner }
+                reviews(first: 100) {
+                  nodes { id body state submittedAt url author { login } }
+                }
+              }
+            }
+          }
+          pageInfo { endCursor hasNextPage }
+        }
+      }
+    `;
+
+    for (;;) {
+      const variables = { q: reviewedPrQuery, after: reviewedCursor };
+      const { data } = await graphqlFetch({
+        token,
+        query: submittedReviewsSearchQuery,
+        variables,
+        fetchFn,
+      });
+      const search = (data as { search?: { edges?: { node?: GraphQLPrNode }[]; pageInfo?: { endCursor?: string; hasNextPage?: boolean } } })?.search;
+      if (!search) throw new Error("Unexpected GraphQL response: no search");
+
+      const edges = search.edges ?? [];
+      for (const edge of edges) {
+        const node = edge?.node;
+        if (!node || node.__typename !== "PullRequest") continue;
+        const repoFullName = node.baseRepository?.nameWithOwner ?? "";
+        if (node.reviews?.nodes?.length) {
+          for (const r of node.reviews.nodes) {
+            // Only include reviews submitted by the authenticated user
+            if (r.author?.login !== login) continue;
+            // Filter to the requested date range by submission timestamp
+            if (r.submittedAt) {
+              const submittedTs = new Date(r.submittedAt).getTime();
+              if (submittedTs < startTs || submittedTs > endTs) continue;
+            }
+            reviews.push(mapGraphQLReviewToRaw(r, repoFullName, node.number));
+          }
+        }
+      }
+
+      const hasNextReviewed = search.pageInfo?.hasNextPage === true;
+      if (!hasNextReviewed) break;
+      reviewedCursor = search.pageInfo?.endCursor ?? null;
+      if (!reviewedCursor) break;
+    }
   }
 
   return {
