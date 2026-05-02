@@ -433,34 +433,67 @@ describe("Generate", () => {
   });
 
   it("Generate premium report button uses credit and shows shared progress UI", async () => {
+    let jobResolve;
+    const jobHang = new Promise((r) => {
+      jobResolve = r;
+    });
+    let jobCalls = 0;
     const evidence = JSON.stringify({
       timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
       contributions: [],
     });
+    const doneResult = { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} };
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({ login: "u", scope: "read:user" }));
       if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: true, credits_per_purchase: 1, price_cents: 100 }));
       if (String(url) === "/api/payments/credits") return Promise.resolve(mockRes({ credits: 2 }));
       if (String(url) === "/api/jobs") return Promise.resolve(mockRes({ latest: null }));
       if (String(url) === "/api/generate") return Promise.resolve(mockRes({ job_id: "j1", premium: true, credits_remaining: 1 }, true, 202));
-      if (String(url).includes("/api/jobs/")) return Promise.resolve(mockRes({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } }));
+      if (String(url).includes("/api/jobs/")) {
+        jobCalls++;
+        return jobCalls === 1
+          ? Promise.resolve(mockRes({ status: "running", progress: "1/5 Themes" }))
+          : jobHang;
+      }
       return Promise.reject(new Error("Unmocked: " + url));
     });
-    const storage = {};
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation((key) => storage[key] ?? null);
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation((key, value) => { storage[key] = value; });
-    storage.premium_stripe_session_id = "sess_fake";
-    render(<Generate />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /generate premium report/i })).toBeInTheDocument());
-    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), { target: { value: evidence } });
-    fireEvent.click(screen.getByRole("button", { name: /generate premium report/i }));
-    await waitFor(() => {
-      expect(screen.getByRole("progressbar", { name: /generating review/i })).toBeInTheDocument();
+    const lsMem = { premium_stripe_session_id: "sess_fake" };
+    const lsPrev = window.localStorage;
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k) => lsMem[k] ?? null,
+        setItem: (k, v) => {
+          lsMem[k] = String(v);
+        },
+        removeItem: (k) => {
+          delete lsMem[k];
+        },
+        clear: () => {
+          for (const k of Object.keys(lsMem)) delete lsMem[k];
+        },
+        key: () => null,
+        length: 0,
+      },
     });
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /your review/i })).toBeInTheDocument();
-    });
-    expect(screen.getByText(/1 credit left/i)).toBeInTheDocument();
+    try {
+      render(<Generate />);
+      await waitFor(() => expect(screen.getByRole("button", { name: /generate premium report/i })).toBeInTheDocument());
+      const textarea = screen.getByPlaceholderText(/timeframe.*contributions/);
+      fireEvent.change(textarea, { target: { value: evidence } });
+      await waitFor(() => expect(textarea).toHaveValue(evidence));
+      fireEvent.click(screen.getByRole("button", { name: /generate premium report/i }));
+      await waitFor(() => {
+        expect(screen.getByRole("progressbar", { name: /generating review/i })).toBeInTheDocument();
+      });
+      jobResolve(mockRes({ status: "done", result: doneResult }));
+      await waitFor(() => {
+        expect(screen.getByRole("heading", { name: /your review/i })).toBeInTheDocument();
+      });
+      expect(screen.getByText(/1 credit left/i)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "localStorage", { configurable: true, value: lsPrev });
+    }
   });
 
   it("when generating with no progress text yet, shows progressbar but no progress paragraph", async () => {
