@@ -22,10 +22,11 @@ import type {
   PeriodType,
 } from "../../lib/periodic-store.js";
 import { weekStart, weekEnd } from "../../lib/periodic-store.js";
+import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
 
 export interface PeriodicRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
+  /** Injected in tests; defaults to streaming JSON from the request. */
+  readJsonBody?: (req: IncomingMessage) => Promise<object>;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
   collectAndNormalize: (opts: { token: string; start_date: string; end_date: string }) => Promise<Evidence>;
@@ -53,7 +54,8 @@ const DEFAULT_SUMMARIES_LIMIT = 90;
 const MAX_SUMMARIES_LIMIT = 365;
 
 export function periodicRoutes(options: PeriodicRoutesOptions) {
-  const { readJsonBody, respondJson, getSessionIdFromRequest, getSession, collectAndNormalize } = options;
+  const { getSessionIdFromRequest, getSession, collectAndNormalize } = options;
+  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
 
   async function getStore() {
     const allProvided =

@@ -104,29 +104,28 @@ function apiRoutesPlugin() {
         authRoutes({
           sessionSecret,
           clientId,
-          clientSecret,
           getRequestContext,
-          getSessionIdFromRequest: getSessionId,
-          getSession,
-          destroySession,
-          setSessionCookie,
-          clearSessionCookie,
-          setStateCookie,
-          getStateFromRequest: (r) =>
-            getStateFromRequest(r, sessionSecret),
-          clearStateCookie,
-          getAndRemoveOAuthState,
-          setOAuthState,
-          createSession,
-          exchangeCodeForToken: (code, uri) =>
-            exchangeCodeForToken(code, uri, clientId!, clientSecret!, fetch),
-          getGitHubUser: (token) => getGitHubUser(token, fetch),
-          handleCallback,
-          handleMe,
-          handleLogout,
-          getAuthRedirectUrl,
-          respondJson,
-          randomState,
+          auth: {
+            getSessionIdFromRequest: getSessionId,
+            getSession,
+            destroySession,
+            setSessionCookie,
+            clearSessionCookie,
+            setStateCookie,
+            getStateFromRequest: (r) =>
+              getStateFromRequest(r, sessionSecret),
+            clearStateCookie,
+            getAndRemoveOAuthState,
+            setOAuthState,
+            createSession,
+            exchangeCodeForToken: (code, uri) =>
+              exchangeCodeForToken(code, uri, clientId!, clientSecret!, fetch),
+            getGitHubUser: (token) => getGitHubUser(token, fetch),
+            handleCallback,
+            handleMe,
+            handleLogout,
+            getAuthRedirectUrl,
+          },
           log: (event, detail) =>
             console.error("[auth]", event, detail ? String(detail) : ""),
         })
@@ -138,15 +137,12 @@ function apiRoutesPlugin() {
           getSessionIdFromRequest: getSessionId,
           getLatestJob,
           getJob,
-          respondJson,
         })
       );
 
       server.middlewares.use(
         "/api/generate",
         generateRoutes({
-          readJsonBody,
-          respondJson,
           validateEvidence,
           createJob,
           runInBackground,
@@ -159,9 +155,6 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/collect",
         collectRoutes({
-          readJsonBody,
-          respondJson,
-          DATE_YYYY_MM_DD,
           getSessionIdFromRequest: getSessionId,
           getSession,
           createJob,
@@ -173,7 +166,6 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/payments",
         paymentsRoutes({
-          respondJson,
           getSessionIdFromRequest: getSessionId,
           getSession,
         })
@@ -181,8 +173,6 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/snapshots",
         snapshotsRoutes({
-          readJsonBody,
-          respondJson,
           getSessionIdFromRequest: getSessionId,
           getSession,
         })
@@ -191,8 +181,6 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/periodic",
         periodicRoutes({
-          readJsonBody,
-          respondJson,
           getSessionIdFromRequest: getSessionId,
           getSession,
           collectAndNormalize,

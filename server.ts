@@ -50,7 +50,6 @@ import {
   getStateFromRequest,
   clearStateCookie,
 } from "./lib/cookies.ts";
-import { readJsonBody, respondJson, randomState, DATE_YYYY_MM_DD } from "./server/helpers.ts";
 import { authRoutes } from "./server/routes/auth.ts";
 import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
@@ -140,34 +139,33 @@ function handleRequest(
       authRoutes({
         sessionSecret,
         clientId,
-        clientSecret,
         getRequestContext: () => ({
           origin,
           redirectUri,
           cookieOpts,
           basePath: "/api/auth",
         }),
-        getSessionIdFromRequest: getSessionId,
-        getSession,
-        destroySession,
-        setSessionCookie,
-        clearSessionCookie,
-        setStateCookie,
-        getStateFromRequest: (r) => getStateFromRequest(r, sessionSecret, { log }),
-        clearStateCookie,
-        getAndRemoveOAuthState,
-        setOAuthState,
-        createSession,
-        exchangeCodeForToken: (code, uri) =>
-          exchangeCodeForToken(code, uri, clientId!, clientSecret!, fetch),
-        getGitHubUser: (token) => getGitHubUser(token, fetch),
-        handleCallback,
-        handleMe,
-        handleLogout,
-        getAuthRedirectUrl,
-        respondJson,
-        randomState,
-        buildCallbackRequest,
+        auth: {
+          getSessionIdFromRequest: getSessionId,
+          getSession,
+          destroySession,
+          setSessionCookie,
+          clearSessionCookie,
+          setStateCookie,
+          getStateFromRequest: (r) => getStateFromRequest(r, sessionSecret, { log }),
+          clearStateCookie,
+          getAndRemoveOAuthState,
+          setOAuthState,
+          createSession,
+          exchangeCodeForToken: (code, uri) =>
+            exchangeCodeForToken(code, uri, clientId!, clientSecret!, fetch),
+          getGitHubUser: (token) => getGitHubUser(token, fetch),
+          handleCallback,
+          handleMe,
+          handleLogout,
+          getAuthRedirectUrl,
+          buildCallbackRequest,
+        },
         log,
       })(wrappedReq, res, next);
       return;
@@ -178,15 +176,12 @@ function handleRequest(
         getSessionIdFromRequest: getSessionId,
         getLatestJob,
         getJob,
-        respondJson,
       })(wrappedReq, res, next);
       return;
     }
 
     if (routeArea === "generate") {
       generateRoutes({
-        readJsonBody,
-        respondJson,
         validateEvidence,
         createJob,
         runInBackground,
@@ -199,7 +194,6 @@ function handleRequest(
 
     if (routeArea === "payments") {
       paymentsRoutes({
-        respondJson,
         getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
@@ -208,9 +202,6 @@ function handleRequest(
 
     if (routeArea === "collect") {
       collectRoutes({
-        readJsonBody,
-        respondJson,
-        DATE_YYYY_MM_DD,
         getSessionIdFromRequest: getSessionId,
         getSession,
         createJob,
@@ -221,8 +212,6 @@ function handleRequest(
     }
     if (routeArea === "snapshots") {
       snapshotsRoutes({
-        readJsonBody,
-        respondJson,
         getSessionIdFromRequest: getSessionId,
         getSession,
       })(wrappedReq, res, next);
@@ -230,8 +219,6 @@ function handleRequest(
     }
     if (routeArea === "periodic") {
       periodicRoutes({
-        readJsonBody,
-        respondJson,
         getSessionIdFromRequest: getSessionId,
         getSession,
         collectAndNormalize,

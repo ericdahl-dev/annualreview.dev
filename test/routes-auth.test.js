@@ -1,18 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { authRoutes } from "../server/routes/auth.ts";
-import { mockRes, respondJson } from "./helpers.js";
+import { mockRes } from "./helpers.js";
 
-function makeOptions(overrides = {}) {
+function makeAuth(overrides = {}) {
   return {
-    sessionSecret: "test-secret",
-    clientId: "cid",
-    clientSecret: "csec",
-    getRequestContext: () => ({
-      origin: "http://localhost:3000",
-      redirectUri: "http://localhost:3000/api/auth/callback/github",
-      cookieOpts: {},
-      basePath: "/api/auth",
-    }),
     getSessionIdFromRequest: () => null,
     getSession: () => undefined,
     destroySession: vi.fn(),
@@ -30,26 +21,44 @@ function makeOptions(overrides = {}) {
     handleMe: vi.fn(),
     handleLogout: vi.fn(),
     getAuthRedirectUrl: vi.fn().mockReturnValue("https://github.com/login/oauth/authorize?x=1"),
-    respondJson,
-    randomState: () => "rand123",
     buildCallbackRequest: undefined,
-    log: vi.fn(),
     ...overrides,
+  };
+}
+
+function makeOptions(overrides = {}) {
+  const { auth: authOverrides, ...rest } = overrides;
+  return {
+    sessionSecret: "test-secret",
+    clientId: "cid",
+    getRequestContext: () => ({
+      origin: "http://localhost:3000",
+      redirectUri: "http://localhost:3000/api/auth/callback/github",
+      cookieOpts: {},
+      basePath: "/api/auth",
+    }),
+    auth: makeAuth(authOverrides),
+    log: vi.fn(),
+    ...rest,
   };
 }
 
 describe("authRoutes – GET /github", () => {
   it("redirects to GitHub OAuth URL", () => {
     const opts = makeOptions();
+    // Inject deterministic randomState for test assertions
+    const origRandom = Math.random;
+    Math.random = () => 0;
     const handler = authRoutes(opts);
     const req = { method: "GET", url: "/github?scope=public", headers: {} };
     const res = mockRes();
     res.writeHead = vi.fn();
     res.end = vi.fn();
     handler(req, res, () => {});
-    expect(opts.setStateCookie).toHaveBeenCalled();
-    expect(opts.setOAuthState).toHaveBeenCalled();
-    expect(opts.getAuthRedirectUrl).toHaveBeenCalledWith("public", "public_rand123", expect.any(String), "cid");
+    Math.random = origRandom;
+    expect(opts.auth.setStateCookie).toHaveBeenCalled();
+    expect(opts.auth.setOAuthState).toHaveBeenCalled();
+    expect(opts.auth.getAuthRedirectUrl).toHaveBeenCalledWith("public", expect.any(String), expect.any(String), "cid");
     expect(res.writeHead).toHaveBeenCalledWith(302, { Location: expect.any(String) });
   });
 
@@ -70,7 +79,7 @@ describe("authRoutes – GET /github", () => {
     res.writeHead = vi.fn();
     res.end = vi.fn();
     handler(req, res, () => {});
-    expect(opts.getAuthRedirectUrl).toHaveBeenCalledWith("repo", "repo_rand123", expect.any(String), "cid");
+    expect(opts.auth.getAuthRedirectUrl).toHaveBeenCalledWith("repo", expect.stringMatching(/^repo_/), expect.any(String), "cid");
   });
 });
 
@@ -81,12 +90,12 @@ describe("authRoutes – GET /callback/github", () => {
     const req = { method: "GET", url: "/callback/github?code=abc&state=s1", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
-    await vi.waitFor(() => expect(opts.handleCallback).toHaveBeenCalled());
+    await vi.waitFor(() => expect(opts.auth.handleCallback).toHaveBeenCalled());
   });
 
   it("uses buildCallbackRequest when provided", async () => {
     const buildCallbackRequest = vi.fn((req, fullUrl) => ({ url: fullUrl, headers: req.headers }));
-    const opts = makeOptions({ buildCallbackRequest });
+    const opts = makeOptions({ auth: { buildCallbackRequest } });
     const handler = authRoutes(opts);
     const req = { method: "GET", url: "/callback/github?code=abc", headers: {} };
     const res = mockRes();
@@ -95,9 +104,7 @@ describe("authRoutes – GET /callback/github", () => {
   });
 
   it("catches handleCallback errors and returns 500", async () => {
-    const opts = makeOptions({
-      handleCallback: vi.fn().mockRejectedValue(new Error("boom")),
-    });
+    const opts = makeOptions({ auth: { handleCallback: vi.fn().mockRejectedValue(new Error("boom")) } });
     const handler = authRoutes(opts);
     const req = { method: "GET", url: "/callback/github?code=abc", headers: {} };
     const res = mockRes();
@@ -114,7 +121,7 @@ describe("authRoutes – GET /me", () => {
     const req = { method: "GET", url: "/me", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
-    expect(opts.handleMe).toHaveBeenCalled();
+    expect(opts.auth.handleMe).toHaveBeenCalled();
   });
 });
 
@@ -125,7 +132,7 @@ describe("authRoutes – POST /logout", () => {
     const req = { method: "POST", url: "/logout", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
-    expect(opts.handleLogout).toHaveBeenCalled();
+    expect(opts.auth.handleLogout).toHaveBeenCalled();
   });
 });
 
