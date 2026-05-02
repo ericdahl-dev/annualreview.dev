@@ -220,6 +220,17 @@ export default function Generate() {
     if (stripeSessionId) {
       evidence = { ...evidence, _stripe_session_id: stripeSessionId };
     }
+    const posthogDistinctId = posthog?.get_distinct_id?.();
+    if (posthogDistinctId) {
+      const posthogTraceId =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      evidence = {
+        ...evidence,
+        posthog_distinct_id: posthogDistinctId,
+        posthog_trace_id: posthogTraceId,
+      };
+    }
     setError(null);
     setLoading(true);
     setResult(null);

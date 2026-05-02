@@ -55,6 +55,7 @@ import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
+import { attachPosthogLogShutdown } from "./lib/posthog-shutdown.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
 import { snapshotsRoutes } from "./server/routes/snapshots.ts";
 import { periodicRoutes } from "./server/routes/periodic.ts";
@@ -243,3 +244,5 @@ createServer(handleRequest).listen(port, () => {
     runMigrations().catch((err) => console.error("[db] migration failed:", err));
   }
 });
+
+attachPosthogLogShutdown();
