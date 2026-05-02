@@ -19,6 +19,7 @@ interface ThemeEntry {
   confidence?: string;
   notes_or_assumptions?: string;
   anchor_evidence?: EvidenceRef[];
+  evidence_ids?: string[];
 }
 
 interface Bullet {
@@ -62,20 +63,20 @@ interface SelfEvalSections {
   performance_dimensions?: PerformanceDimension[];
 }
 
-interface ThemesOutput {
+export interface ThemesOutput {
   themes?: ThemeEntry[];
 }
 
-interface BulletsOutput {
+export interface BulletsOutput {
   top_10_bullets_overall?: Bullet[];
   bullets_by_theme?: BulletsByTheme[];
 }
 
-interface StoriesOutput {
+export interface StoriesOutput {
   stories?: Story[];
 }
 
-interface SelfEvalOutput {
+export interface SelfEvalOutput {
   sections?: SelfEvalSections;
 }
 
