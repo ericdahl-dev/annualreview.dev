@@ -55,7 +55,7 @@ import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
-import { shutdownPostHogLogs } from "./lib/posthog-logs.ts";
+import { attachPosthogLogShutdown } from "./lib/posthog-shutdown.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
 import { snapshotsRoutes } from "./server/routes/snapshots.ts";
 import { periodicRoutes } from "./server/routes/periodic.ts";
@@ -245,42 +245,4 @@ createServer(handleRequest).listen(port, () => {
   }
 });
 
-let shuttingDown = false;
-
-function handleShutdown(signal: NodeJS.Signals): void {
-  if (shuttingDown) return;
-  shuttingDown = true;
-
-  const timeout = setTimeout(() => {
-    console.error(
-      `[shutdown] Timed out waiting for PostHog logs to flush after ${signal}; exiting with code 1.`
-    );
-    process.exit(1);
-  }, 10_000);
-
-  shutdownPostHogLogs()
-    .then(() => {
-      clearTimeout(timeout);
-      process.exit(0);
-    })
-    .catch((err) => {
-      clearTimeout(timeout);
-      console.error(
-        `[shutdown] Failed to flush PostHog logs on ${signal}:`,
-        err
-      );
-      try {
-        logger.emit({
-          severityText: "ERROR",
-          body: "Failed to flush PostHog logs during shutdown",
-          attributes: { signal, error: String(err) },
-        });
-      } catch {
-        // If logging fails here, we still proceed with non-zero exit.
-      }
-      process.exit(1);
-    });
-}
-
-process.on("SIGTERM", () => handleShutdown("SIGTERM"));
-process.on("SIGINT", () => handleShutdown("SIGINT"));
+attachPosthogLogShutdown();

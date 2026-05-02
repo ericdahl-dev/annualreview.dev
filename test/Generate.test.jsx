@@ -4,6 +4,14 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+const posthogStub = vi.hoisted(() => ({
+  capture: vi.fn(),
+  get_distinct_id: vi.fn(() => undefined),
+}));
+
+vi.mock("../src/posthog.ts", () => ({ posthog: posthogStub }));
+
 import Generate from "../src/Generate.tsx";
 import { pollJob } from "../src/api.js";
 import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
@@ -22,6 +30,9 @@ function mockRes(body, ok = true, status = ok ? 200 : 400) {
 
 describe("Generate", () => {
   beforeEach(() => {
+    posthogStub.capture.mockClear();
+    posthogStub.get_distinct_id.mockReset();
+    posthogStub.get_distinct_id.mockImplementation(() => undefined);
     vi.stubGlobal("fetch", vi.fn());
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
@@ -494,6 +505,44 @@ describe("Generate", () => {
     } finally {
       Object.defineProperty(window, "localStorage", { configurable: true, value: lsPrev });
     }
+  });
+
+  it("includes PostHog trace fields in generate body when distinct id is available", async () => {
+    const uuidSpy = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValue("00000000-0000-4000-8000-000000000001");
+    posthogStub.get_distinct_id.mockReturnValue("ph_distinct_xyz");
+    let jobCalls = 0;
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url) === "/api/auth/me") return Promise.resolve(mockRes({}, false, 401));
+      if (String(url) === "/api/payments/config") return Promise.resolve(mockRes({ enabled: false }));
+      if (String(url) === "/api/generate") return Promise.resolve(mockRes({ job_id: "j1" }, true, 202));
+      if (String(url).includes("/api/jobs/")) {
+        jobCalls++;
+        return jobCalls === 1
+          ? Promise.resolve(mockRes({ status: "running", progress: "1/5 Themes" }))
+          : Promise.resolve(mockRes({ status: "done", result: { themes: { themes: [] }, bullets: {}, stories: {}, self_eval: {} } }));
+      }
+      return Promise.reject(new Error("Unmocked: " + url));
+    });
+    render(<Generate />);
+    fireEvent.change(screen.getByPlaceholderText(/timeframe.*contributions/), {
+      target: {
+        value: JSON.stringify({
+          timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
+          contributions: [],
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /generate review/i }));
+    await waitFor(() => {
+      const genCall = vi.mocked(fetch).mock.calls.find((c) => String(c[0]) === "/api/generate");
+      expect(genCall).toBeDefined();
+      const body = JSON.parse(genCall[1].body);
+      expect(body.posthog_distinct_id).toBe("ph_distinct_xyz");
+      expect(body.posthog_trace_id).toBe("00000000-0000-4000-8000-000000000001");
+    });
+    uuidSpy.mockRestore();
   });
 
   it("when generating with no progress text yet, shows progressbar but no progress paragraph", async () => {
