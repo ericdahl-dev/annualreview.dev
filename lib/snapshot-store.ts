@@ -11,8 +11,8 @@
  * Throws on first use if DATABASE_URL is not set.
  */
 
-import type { Pool } from "pg";
 import type { Evidence, Contribution } from "../types/evidence.js";
+import { getPool, isDbConfigured } from "./db.js";
 import { generateId } from "./id.js";
 
 export type SnapshotPeriod = "daily" | "weekly" | "monthly" | "custom";
@@ -30,37 +30,6 @@ export interface Snapshot {
 
 export interface SnapshotWithEvidence extends Snapshot {
   evidence: Evidence;
-}
-
-let pool: Pool | null = null;
-
-async function getPool(): Promise<Pool> {
-  if (pool) return pool;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is required for the snapshot store");
-  const { default: pg } = await import("pg");
-  pool = new pg.Pool({ connectionString: url });
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS contribution_snapshots (
-        id                 TEXT PRIMARY KEY,
-        user_login         TEXT NOT NULL,
-        period             TEXT NOT NULL,
-        start_date         TEXT NOT NULL,
-        end_date           TEXT NOT NULL,
-        label              TEXT,
-        contribution_count INTEGER NOT NULL DEFAULT 0,
-        evidence           JSONB NOT NULL,
-        created_at         TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_snapshots_user_login
-        ON contribution_snapshots (user_login, created_at DESC);
-    `);
-  } finally {
-    client.release();
-  }
-  return pool;
 }
 
 /**
@@ -210,9 +179,8 @@ export async function mergeSnapshots(
   return combined;
 }
 
-/** Returns true when DATABASE_URL is configured so the snapshot store can be used. */
 export function isSnapshotStoreConfigured(): boolean {
-  return !!process.env.DATABASE_URL;
+  return isDbConfigured();
 }
 
 /** Reset the store (for tests). Removes all rows. */
@@ -221,7 +189,7 @@ export async function clearSnapshotStore(): Promise<void> {
   await db.query("DELETE FROM contribution_snapshots");
 }
 
-/** Reset the pool (for tests). Forces a fresh connection on next use. */
+/** @deprecated Use resetPool from lib/db.ts instead. No-op; pool is managed centrally. */
 export function resetPool(): void {
-  pool = null;
+  // no-op: pool is now managed by lib/db.ts
 }

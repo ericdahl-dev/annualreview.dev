@@ -59,6 +59,7 @@ import { paymentsRoutes } from "./server/routes/payments.ts";
 import { snapshotsRoutes } from "./server/routes/snapshots.ts";
 import { periodicRoutes } from "./server/routes/periodic.ts";
 import { getSessionSecret } from "./server/session-secret.ts";
+import { runMigrations, isDbConfigured } from "./lib/db.ts";
 
 const MIME: Record<string, string> = {
   ".html": "text/html",
@@ -238,4 +239,7 @@ createServer(handleRequest).listen(port, () => {
     body: `Server listening on port ${port}`,
     attributes: { port },
   });
+  if (isDbConfigured()) {
+    runMigrations().catch((err) => console.error("[db] migration failed:", err));
+  }
 });
