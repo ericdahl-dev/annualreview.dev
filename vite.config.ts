@@ -47,6 +47,7 @@ import { jobsRoutes } from "./server/routes/jobs.ts";
 import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
+import { snapshotsRoutes } from "./server/routes/snapshots.ts";
 
 function apiRoutesPlugin() {
   return {
@@ -171,6 +172,15 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/payments",
         paymentsRoutes({
+          respondJson,
+          getSessionIdFromRequest: getSessionId,
+          getSession,
+        })
+      );
+      server.middlewares.use(
+        "/api/snapshots",
+        snapshotsRoutes({
+          readJsonBody,
           respondJson,
           getSessionIdFromRequest: getSessionId,
           getSession,

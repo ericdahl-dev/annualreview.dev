@@ -8,6 +8,7 @@ import { posthog } from "./posthog";
 import { parseJsonResponse, pollJob } from "./api.js";
 import { useAuth } from "./hooks/useAuth";
 import { useGitHubCollect } from "./hooks/useGitHubCollect";
+import { useSnapshots } from "./hooks/useSnapshots";
 import CollectForm from "./CollectForm";
 import NarrativeView, { type NarrativeViewProps } from "./NarrativeView";
 import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.js";
@@ -54,6 +55,15 @@ export default function Generate() {
   /** Credits remaining for the stored Stripe session ID, or null if unknown. */
   const [premiumCredits, setPremiumCredits] = useState<number | null>(null);
 
+  /** Snapshot save state */
+  const [snapshotPeriod, setSnapshotPeriod] = useState<"daily" | "weekly" | "monthly" | "custom">("weekly");
+  const [snapshotLabel, setSnapshotLabel] = useState("");
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
+  const [snapshotSaved, setSnapshotSaved] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+
+  const { saveSnapshot } = useSnapshots({ user });
+
   const onEvidenceReceived = useCallback((text: string) => {
     setEvidenceText(text);
     setError(null);
@@ -77,6 +87,40 @@ export default function Generate() {
       // Also store in sessionStorage so the post-redirect auto-generate effect picks it up.
       try { sessionStorage.setItem("stripe_session_id", sessionId); } catch { /* ignore */ }
     }
+  }, []);
+
+  // Load a snapshot or merged evidence from URL params / sessionStorage
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    // Load merged evidence passed via sessionStorage from the Dashboard merge action
+    if (params.get("from_snapshot_merge") === "1") {
+      window.history.replaceState({}, "", window.location.pathname);
+      let merged: string | null = null;
+      try { merged = sessionStorage.getItem("merged_evidence"); } catch { /* ignore */ }
+      if (merged) {
+        try { sessionStorage.removeItem("merged_evidence"); } catch { /* ignore */ }
+        setEvidenceText(merged);
+        setError(null);
+      }
+      return;
+    }
+
+    // Load a single snapshot by id
+    const snapshotId = params.get("snapshot_id");
+    if (snapshotId) {
+      window.history.replaceState({}, "", window.location.pathname);
+      fetch(`/api/snapshots/${snapshotId}`, { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { evidence?: unknown } | null) => {
+          if (data?.evidence) {
+            setEvidenceText(JSON.stringify(data.evidence, null, 2));
+            setError(null);
+          }
+        })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -342,6 +386,37 @@ export default function Generate() {
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveSnapshot = async () => {
+    setSnapshotError(null);
+    setSnapshotSaved(false);
+    let ev: Record<string, unknown>;
+    try {
+      ev = JSON.parse(evidenceText) as Record<string, unknown>;
+    } catch {
+      setSnapshotError("Invalid JSON — load or paste evidence first.");
+      return;
+    }
+    const tf = ev.timeframe as { start_date?: string; end_date?: string } | undefined;
+    if (!tf?.start_date || !tf?.end_date) {
+      setSnapshotError("Evidence must have timeframe.start_date and timeframe.end_date.");
+      return;
+    }
+    setSnapshotSaving(true);
+    const id = await saveSnapshot({
+      period: snapshotPeriod,
+      start_date: tf.start_date,
+      end_date: tf.end_date,
+      evidence: ev as object,
+      label: snapshotLabel.trim() || undefined,
+    });
+    setSnapshotSaving(false);
+    if (id) {
+      setSnapshotSaved(true);
+      setSnapshotLabel("");
+      posthog?.capture("snapshot_saved", { period: snapshotPeriod });
+    }
+  };
+
   return (
     <div className="generate">
       <header className="generate-header">
@@ -361,6 +436,11 @@ export default function Generate() {
                 Log out
               </button>
             </span>
+          )}
+          {authChecked && user && (
+            <a href="/dashboard" className="generate-back" title="View saved snapshots">
+              Snapshots
+            </a>
           )}
           <a href="/" className="generate-back">
             ← Back
@@ -646,6 +726,57 @@ yarn normalize --input raw.json --output evidence.json`}
             bullets, and stories to what matters most to you.
           </p>
         </div>
+
+        {/* Save as Snapshot — only shown for logged-in users once evidence is loaded */}
+        {authChecked && user && evidenceText.trim() && (
+          <div className="generate-snapshot-section">
+            <h2 className="generate-step-title generate-snapshot-title">
+              Save as snapshot{" "}
+              <span className="generate-goals-optional">(optional)</span>
+            </h2>
+            <p className="generate-lead">
+              Save this date range as a periodic snapshot to track contributions over time.
+              Merge snapshots on the{" "}
+              <a href="/dashboard">Dashboard</a> to generate a rolled-up annual review.
+            </p>
+            <div className="generate-snapshot-row">
+              <select
+                className="generate-collect-input generate-snapshot-period"
+                value={snapshotPeriod}
+                onChange={(e) => setSnapshotPeriod(e.target.value as typeof snapshotPeriod)}
+                aria-label="Snapshot period"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input
+                type="text"
+                className="generate-collect-input generate-snapshot-label-input"
+                placeholder="Label (optional, e.g. Q1 2025)"
+                value={snapshotLabel}
+                onChange={(e) => setSnapshotLabel(e.target.value)}
+                aria-label="Snapshot label"
+              />
+              <button
+                type="button"
+                className="generate-collect-btn generate-snapshot-btn"
+                onClick={handleSaveSnapshot}
+                disabled={snapshotSaving}
+              >
+                {snapshotSaving ? "Saving…" : "Save snapshot"}
+              </button>
+            </div>
+            {snapshotError && <p className="generate-error">{snapshotError}</p>}
+            {snapshotSaved && (
+              <p className="generate-snapshot-saved">
+                ✓ Snapshot saved.{" "}
+                <a href="/dashboard">View all snapshots →</a>
+              </p>
+            )}
+          </div>
+        )}
 
         {error && <p className="generate-error">{error}</p>}
 

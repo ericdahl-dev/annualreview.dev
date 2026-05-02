@@ -1,7 +1,8 @@
-// Path-based routing: /generate → Generate page, else Landing. No router library.
+// Path-based routing: /generate → Generate page, /dashboard → Dashboard page, else Landing. No router library.
 import { useState, useEffect } from "react";
 import Landing from "./Landing";
 import Generate from "./Generate";
+import Dashboard from "./Dashboard";
 import { posthog } from "./posthog";
 
 export default function App() {
@@ -16,5 +17,7 @@ export default function App() {
     posthog?.capture("$pageview", { path });
   }, [path]);
 
-  return path === "/generate" ? <Generate /> : <Landing />;
+  if (path === "/generate") return <Generate />;
+  if (path === "/dashboard") return <Dashboard />;
+  return <Landing />;
 }
