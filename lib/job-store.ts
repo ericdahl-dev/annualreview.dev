@@ -13,12 +13,14 @@ export interface Job {
   error?: string | null;
 }
 
+import { generateId } from "./id.js";
+
 const jobs = new Map<string, Job>();
 
 const STATUS = { PENDING: "pending", RUNNING: "running", DONE: "done", FAILED: "failed" } as const;
 
 export function createJob(type: string, sessionId?: string): string {
-  const id = `job_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const id = generateId("job");
   const record: Job = {
     type,
     status: STATUS.PENDING,

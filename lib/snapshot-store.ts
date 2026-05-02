@@ -13,6 +13,7 @@
 
 import type { Pool } from "pg";
 import type { Evidence, Contribution } from "../types/evidence.js";
+import { generateId } from "./id.js";
 
 export type SnapshotPeriod = "daily" | "weekly" | "monthly" | "custom";
 
@@ -75,7 +76,7 @@ export async function saveSnapshot(
   label?: string
 ): Promise<string> {
   const db = await getPool();
-  const id = `snap_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const id = generateId("snap");
   const createdAt = new Date().toISOString();
   const contributionCount = Array.isArray(evidence.contributions)
     ? evidence.contributions.length
