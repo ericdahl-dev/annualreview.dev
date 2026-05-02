@@ -15,8 +15,8 @@
  * Throws on first use if DATABASE_URL is not set.
  */
 
-import type { Pool } from "pg";
 import type { Evidence } from "../types/evidence.js";
+import { getPool, isDbConfigured } from "./db.js";
 import { generateId } from "./id.js";
 
 export type PeriodType = "daily" | "weekly" | "monthly";
@@ -40,40 +40,6 @@ export interface PeriodicSummary {
 export interface PeriodicSummaryWithEvidence extends PeriodicSummary {
   /** Only present for daily summaries */
   evidence: Evidence | null;
-}
-
-let pool: Pool | null = null;
-
-async function getPool(): Promise<Pool> {
-  if (pool) return pool;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is required for the periodic store");
-  const { default: pg } = await import("pg");
-  pool = new pg.Pool({ connectionString: url });
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS periodic_summaries (
-        id                 TEXT PRIMARY KEY,
-        user_login         TEXT NOT NULL,
-        period_type        TEXT NOT NULL,
-        period_key         TEXT NOT NULL,
-        start_date         TEXT NOT NULL,
-        end_date           TEXT NOT NULL,
-        contribution_count INTEGER NOT NULL DEFAULT 0,
-        summary            TEXT NOT NULL,
-        child_ids          JSONB,
-        evidence           JSONB,
-        created_at         TEXT NOT NULL,
-        UNIQUE(user_login, period_type, period_key)
-      );
-      CREATE INDEX IF NOT EXISTS idx_periodic_user_type
-        ON periodic_summaries (user_login, period_type, period_key DESC);
-    `);
-  } finally {
-    client.release();
-  }
-  return pool;
 }
 
 const MS_PER_DAY = 86400000;
@@ -391,9 +357,8 @@ export async function deletePeriodicSummary(
   return (result.rowCount ?? 0) > 0;
 }
 
-/** Returns true when DATABASE_URL is configured. */
 export function isPeriodicStoreConfigured(): boolean {
-  return !!process.env.DATABASE_URL;
+  return isDbConfigured();
 }
 
 /** Clear all rows (for tests). */
@@ -402,7 +367,7 @@ export async function clearPeriodicStore(): Promise<void> {
   await db.query("DELETE FROM periodic_summaries");
 }
 
-/** Reset pool (for tests). Forces fresh connection on next use. */
+/** @deprecated Use resetPool from lib/db.ts instead. No-op; pool is managed centrally. */
 export function resetPeriodicPool(): void {
-  pool = null;
+  // no-op: pool is now managed by lib/db.ts
 }
