@@ -75,6 +75,9 @@ async function getPool(): Promise<Pool> {
   return pool;
 }
 
+const MS_PER_DAY = 86400000;
+const MS_PER_WEEK = 7 * MS_PER_DAY;
+
 /** Derive ISO week key "YYYY-WNN" from a date string "YYYY-MM-DD". */
 export function toWeekKey(date: string): string {
   const d = new Date(date + "T12:00:00Z"); // noon UTC avoids DST edge cases
@@ -89,7 +92,7 @@ export function toWeekKey(date: string): string {
   const week1Monday = new Date(jan4);
   week1Monday.setUTCDate(jan4.getUTCDate() - jan4DayOfWeek + 1);
   // Use Math.floor: d is at noon, week1Monday at midnight — floor avoids rounding across midnight
-  const weekNum = Math.floor((d.getTime() - week1Monday.getTime()) / (7 * 86400000)) + 1;
+  const weekNum = Math.floor((d.getTime() - week1Monday.getTime()) / MS_PER_WEEK) + 1;
   return `${isoYear}-W${String(weekNum).padStart(2, "0")}`;
 }
 

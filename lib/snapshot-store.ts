@@ -163,6 +163,10 @@ export async function mergeSnapshots(
   userLogin: string
 ): Promise<Evidence | null> {
   if (ids.length === 0) return null;
+  // Validate id format to prevent passing unexpected values to the DB
+  const SAFE_ID_RE = /^snap_[a-z0-9_]+$/;
+  const safeIds = ids.filter((id) => typeof id === "string" && SAFE_ID_RE.test(id));
+  if (safeIds.length === 0) return null;
   const db = await getPool();
 
   // Use ANY($2::text[]) to pass the ids array as a single parameter
@@ -171,7 +175,7 @@ export async function mergeSnapshots(
      FROM contribution_snapshots
      WHERE user_login = $1 AND id = ANY($2::text[])
      ORDER BY start_date ASC`,
-    [userLogin, ids]
+    [userLogin, safeIds]
   );
 
   if (result.rows.length === 0) return null;

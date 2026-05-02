@@ -49,6 +49,8 @@ type Next = () => void;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
 const VALID_PERIOD_TYPES = new Set(["daily", "weekly", "monthly"]);
+const DEFAULT_SUMMARIES_LIMIT = 90;
+const MAX_SUMMARIES_LIMIT = 365;
 
 export function periodicRoutes(options: PeriodicRoutesOptions) {
   const { readJsonBody, respondJson, getSessionIdFromRequest, getSession, collectAndNormalize } = options;
@@ -316,7 +318,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       const periodType = typeParam && VALID_PERIOD_TYPES.has(typeParam)
         ? (typeParam as PeriodType)
         : undefined;
-      const limit = limitParam ? Math.min(Math.max(parseInt(limitParam), 1), 365) : 90;
+      const limit = limitParam ? Math.min(Math.max(parseInt(limitParam), 1), MAX_SUMMARIES_LIMIT) : DEFAULT_SUMMARIES_LIMIT;
 
       try {
         const summaries = await store.listPeriodicSummaries(userLogin, periodType, limit);
