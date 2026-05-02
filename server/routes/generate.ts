@@ -20,10 +20,11 @@ import { awardCredits as defaultAwardCredits, deductCredit as defaultDeductCredi
 import { PAYMENTS_NOT_CONFIGURED } from "../../lib/api-error-codes.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
+import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
 
 export interface GenerateRoutesOptions {
-  readJsonBody: (req: IncomingMessage) => Promise<object>;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
+  /** Injected in tests; defaults to streaming JSON from the request. */
+  readJsonBody?: (req: IncomingMessage) => Promise<object>;
   validateEvidence: (evidence: unknown) => ValidationResult;
   createJob: (type: string, sessionId?: string) => string;
   runInBackground: (
@@ -32,7 +33,7 @@ export interface GenerateRoutesOptions {
   ) => void;
   runPipeline: (
     evidence: Evidence,
-    opts: { onProgress: (data: { stepIndex: number; total: number; label: string }) => void; premium?: boolean }
+    opts: { onProgress: (data: { stepIndex: number; total: number; label: string }) => void; premium?: boolean; posthogDistinctId?: string; posthogTraceId?: string }
   ) => Promise<PipelineResult>;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
@@ -82,8 +83,6 @@ async function verifyAndAwardFromStripe(
 
 export function generateRoutes(options: GenerateRoutesOptions) {
   const {
-    readJsonBody,
-    respondJson,
     validateEvidence,
     createJob,
     runInBackground,
@@ -96,6 +95,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
     awardCredits = defaultAwardCredits,
     getCredits = defaultGetCredits,
   } = options;
+  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
 
   return async function generateMiddleware(
     req: IncomingMessage,
@@ -113,10 +113,14 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       const {
         _stripe_session_id: rawSessionId,
         _premium: rawPremium,
+        posthog_distinct_id: rawPosthogDistinctId,
+        posthog_trace_id: rawPosthogTraceId,
         ...evidence
       } = body as Record<string, unknown>;
       const stripeSessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
       const wantsPremium = !!rawPremium || !!stripeSessionId;
+      const posthogDistinctId = typeof rawPosthogDistinctId === "string" ? rawPosthogDistinctId : undefined;
+      const posthogTraceId = typeof rawPosthogTraceId === "string" ? rawPosthogTraceId : undefined;
 
       const validation = validateEvidence(evidence);
       if (!validation.valid) {
@@ -174,6 +178,8 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       runInBackground(jobId, (report) =>
         runPipeline(evidence as unknown as Evidence, {
           premium,
+          posthogDistinctId,
+          posthogTraceId,
           onProgress: ({ stepIndex, total, label }) =>
             report({ progress: `${stepIndex}/${total} ${label}` }),
         })

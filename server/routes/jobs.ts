@@ -5,18 +5,18 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Job } from "../../lib/job-store.js";
+import { respondJson } from "../helpers.js";
 
 export interface JobsRoutesOptions {
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getLatestJob: (sessionId: string) => (Job & { id: string }) | null;
   getJob: (id: string) => Job | undefined;
-  respondJson: (res: ServerResponse, status: number, data: object) => void;
 }
 
 type Next = () => void;
 
 export function jobsRoutes(options: JobsRoutesOptions) {
-  const { getSessionIdFromRequest, getLatestJob, getJob, respondJson } = options;
+  const { getSessionIdFromRequest, getLatestJob, getJob } = options;
 
   return function jobsMiddleware(
     req: IncomingMessage,

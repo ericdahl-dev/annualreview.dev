@@ -5,6 +5,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
+import { respondJson, randomState } from "../helpers.js";
 
 export interface RequestContext {
   origin: string;
@@ -13,11 +14,8 @@ export interface RequestContext {
   basePath?: string;
 }
 
-export interface AuthRoutesOptions {
-  sessionSecret: string;
-  clientId: string | undefined;
-  clientSecret: string | undefined;
-  getRequestContext: (req: IncomingMessage) => RequestContext;
+/** All auth domain collaborators grouped as a single service object. */
+export interface AuthService {
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => { login: string; scope?: string } | undefined;
   destroySession: (id: string) => void;
@@ -62,16 +60,17 @@ export interface AuthRoutesOptions {
     redirectUri: string,
     clientId: string
   ) => string;
-  respondJson: (
-    res: ServerResponse,
-    status: number,
-    data: object
-  ) => void;
-  randomState: () => string;
   buildCallbackRequest?: (
     req: IncomingMessage,
     fullUrl: string
   ) => { url: string; headers?: object };
+}
+
+export interface AuthRoutesOptions {
+  sessionSecret: string;
+  clientId: string | undefined;
+  getRequestContext: (req: IncomingMessage) => RequestContext;
+  auth: AuthService;
   log?: (event: string, detail?: string) => void;
 }
 
@@ -82,6 +81,11 @@ export function authRoutes(options: AuthRoutesOptions) {
     sessionSecret,
     clientId,
     getRequestContext,
+    auth,
+    log = () => {},
+  } = options;
+
+  const {
     getSessionIdFromRequest,
     getSession,
     destroySession,
@@ -99,11 +103,8 @@ export function authRoutes(options: AuthRoutesOptions) {
     handleMe,
     handleLogout,
     getAuthRedirectUrl,
-    respondJson,
-    randomState,
     buildCallbackRequest,
-    log = () => {},
-  } = options;
+  } = auth;
 
   return function authMiddleware(
     req: IncomingMessage,

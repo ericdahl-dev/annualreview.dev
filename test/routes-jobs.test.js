@@ -1,13 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { jobsRoutes } from "../server/routes/jobs.ts";
-import { mockRes, respondJson } from "./helpers.js";
+import { mockRes } from "./helpers.js";
 
 function makeOptions(overrides = {}) {
   return {
     getSessionIdFromRequest: () => null,
     getLatestJob: vi.fn().mockReturnValue(null),
     getJob: vi.fn().mockReturnValue(undefined),
-    respondJson,
     ...overrides,
   };
 }

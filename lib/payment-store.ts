@@ -12,7 +12,7 @@
  * Throws on first use if DATABASE_URL is not set.
  */
 
-import type { Pool } from "pg";
+import { getPool, isDbConfigured } from "./db.js";
 
 /** Read at runtime so Vite dev (which copies .env after modules load) sees the correct value. */
 export function getCreditsPerPurchase(): number {
@@ -23,32 +23,7 @@ export function getCreditsPerPurchase(): number {
   return parsed;
 }
 
-let pool: Pool | null = null;
 
-async function getPool(): Promise<Pool> {
-  if (pool) return pool;
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is required for the credit store");
-  const { default: pg } = await import("pg");
-  pool = new pg.Pool({ connectionString: url });
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS credits (
-        user_login TEXT PRIMARY KEY,
-        remaining  INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS credit_events (
-        stripe_session_id TEXT PRIMARY KEY,
-        user_login        TEXT NOT NULL,
-        awarded_at        TEXT NOT NULL
-      );
-    `);
-  } finally {
-    client.release();
-  }
-  return pool;
-}
 
 /**
  * Award CREDITS_PER_PURCHASE credits to a user.
@@ -105,7 +80,7 @@ export async function deductCredit(userLogin: string): Promise<boolean> {
 
 /** Returns true when a Postgres DATABASE_URL is configured and the credit store can be used. */
 export function isCreditStoreConfigured(): boolean {
-  return !!process.env.DATABASE_URL;
+  return isDbConfigured();
 }
 
 /**
@@ -125,3 +100,5 @@ export async function clearCreditStore(): Promise<void> {
   await db.query("DELETE FROM credits");
   await db.query("DELETE FROM credit_events");
 }
+
+
