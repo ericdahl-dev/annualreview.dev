@@ -7,8 +7,8 @@ const GITHUB_TOKEN = "https://github.com/login/oauth/access_token";
 const GITHUB_USER = "https://api.github.com/user";
 
 const SCOPES: Record<string, string> = {
-  public: "read:user public_repo",
-  private: "read:user repo",
+  public: "read:user public_repo read:org",
+  private: "read:user repo read:org",
 };
 
 export function getAuthRedirectUrl(

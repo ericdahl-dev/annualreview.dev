@@ -57,6 +57,8 @@ import { generateRoutes } from "./server/routes/generate.ts";
 import { collectRoutes } from "./server/routes/collect.ts";
 import { logger } from "./lib/posthog-logs.ts";
 import { paymentsRoutes } from "./server/routes/payments.ts";
+import { snapshotsRoutes } from "./server/routes/snapshots.ts";
+import { periodicRoutes } from "./server/routes/periodic.ts";
 import { getSessionSecret } from "./server/session-secret.ts";
 
 const MIME: Record<string, string> = {
@@ -213,6 +215,25 @@ function handleRequest(
         getSession,
         createJob,
         runInBackground,
+        collectAndNormalize,
+      })(wrappedReq, res, next);
+      return;
+    }
+    if (routeArea === "snapshots") {
+      snapshotsRoutes({
+        readJsonBody,
+        respondJson,
+        getSessionIdFromRequest: getSessionId,
+        getSession,
+      })(wrappedReq, res, next);
+      return;
+    }
+    if (routeArea === "periodic") {
+      periodicRoutes({
+        readJsonBody,
+        respondJson,
+        getSessionIdFromRequest: getSessionId,
+        getSession,
         collectAndNormalize,
       })(wrappedReq, res, next);
       return;

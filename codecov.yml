@@ -1,0 +1,7 @@
+# Patch status: diff often includes config, prompts, and UI with uneven test hits.
+# Still upload full report; avoid false-red when project coverage is healthy.
+coverage:
+  status:
+    patch:
+      default:
+        informational: true

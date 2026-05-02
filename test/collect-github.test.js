@@ -27,6 +27,14 @@ describe("collectRawGraphQL", () => {
           text: () => Promise.resolve(""),
         });
       }
+      // Second pass: reviewed-by search — return empty so we can verify first-pass reviews
+      if (body.variables?.q?.includes("reviewed-by")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
+          text: () => Promise.resolve(""),
+        });
+      }
       if (query.includes("search")) {
         return Promise.resolve({
           ok: true,
@@ -104,7 +112,8 @@ describe("collectRawGraphQL", () => {
       repository: { full_name: "org/repo" },
       pull_number: 42,
     });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // 1 viewer + 1 author PR search + 1 reviewed-by search
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
   it("with noReviews omits reviews from output", async () => {
@@ -230,6 +239,14 @@ describe("collectRawGraphQL", () => {
       if (body.query.includes("viewer")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { viewer: { login: "u" } } }), text: () => Promise.resolve("") });
       }
+      // Reviewed-by search returns empty so pagination only happens on the author search
+      if (body.variables?.q?.includes("reviewed-by")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
+          text: () => Promise.resolve(""),
+        });
+      }
       callCount++;
       const isFirst = callCount === 1;
       return Promise.resolve({
@@ -271,6 +288,14 @@ describe("collectRawGraphQL", () => {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ data: { viewer: { login: "u" } } }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      // Reviewed-by search returns empty for this integration test
+      if (body.variables?.q?.includes("reviewed-by")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
           text: () => Promise.resolve(""),
         });
       }
@@ -319,5 +344,186 @@ describe("collectRawGraphQL", () => {
     const types = evidence.contributions.map((c) => c.type);
     expect(types).toContain("pull_request");
     expect(types).toContain("review");
+  });
+
+  it("collects reviews submitted by the user on other people's PRs (org contributions)", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, opts) => {
+      const body = JSON.parse(opts?.body ?? "{}");
+      const query = body.query ?? "";
+      if (query.includes("viewer")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: { viewer: { login: "me" } } }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      // Second pass (reviewed-by search): return a PR with the user's review.
+      // Must check reviewed-by BEFORE author to avoid substring collision with -author:me.
+      if (body.variables?.q?.includes("reviewed-by")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            data: {
+              search: {
+                edges: [{
+                  node: {
+                    __typename: "PullRequest",
+                    number: 99,
+                    baseRepository: { nameWithOwner: "org/project" },
+                    reviews: {
+                      nodes: [
+                        {
+                          id: "PRR_submitted",
+                          body: "Looks good, approved",
+                          state: "APPROVED",
+                          submittedAt: "2025-03-10T10:00:00Z",
+                          url: "https://github.com/org/project/pull/99#pullrequestreview-1",
+                          author: { login: "me" },
+                        },
+                        // Review by a different user — should be filtered out
+                        {
+                          id: "PRR_other",
+                          body: "Some other comment",
+                          state: "COMMENTED",
+                          submittedAt: "2025-03-10T11:00:00Z",
+                          url: "https://github.com/org/project/pull/99#pullrequestreview-2",
+                          author: { login: "colleague" },
+                        },
+                      ],
+                    },
+                  },
+                }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      // First pass (author search): no PRs authored by user
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
+        text: () => Promise.resolve(""),
+      });
+    });
+
+    const result = await collectRawGraphQL({
+      start: "2025-01-01",
+      end: "2025-12-31",
+      noReviews: false,
+      token: "tok",
+      fetchFn: mockFetch,
+    });
+
+    expect(result.pull_requests).toHaveLength(0);
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0]).toMatchObject({
+      id: "PRR_submitted",
+      body: "Looks good, approved",
+      state: "APPROVED",
+      repository: { full_name: "org/project" },
+      pull_number: 99,
+    });
+  });
+
+  it("filters submitted reviews outside the date range", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, opts) => {
+      const body = JSON.parse(opts?.body ?? "{}");
+      const query = body.query ?? "";
+      if (query.includes("viewer")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ data: { viewer: { login: "me" } } }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      // Check reviewed-by first to avoid substring collision
+      if (body.variables?.q?.includes("reviewed-by")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            data: {
+              search: {
+                edges: [{
+                  node: {
+                    __typename: "PullRequest",
+                    number: 5,
+                    baseRepository: { nameWithOwner: "org/repo" },
+                    reviews: {
+                      nodes: [
+                        {
+                          id: "in-range",
+                          body: "In range",
+                          state: "APPROVED",
+                          submittedAt: "2025-06-15T10:00:00Z",
+                          url: "https://x",
+                          author: { login: "me" },
+                        },
+                        {
+                          id: "out-of-range",
+                          body: "Too early",
+                          state: "COMMENTED",
+                          submittedAt: "2024-12-31T23:59:59Z",
+                          url: "https://x",
+                          author: { login: "me" },
+                        },
+                      ],
+                    },
+                  },
+                }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          }),
+          text: () => Promise.resolve(""),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
+        text: () => Promise.resolve(""),
+      });
+    });
+
+    const result = await collectRawGraphQL({
+      start: "2025-01-01",
+      end: "2025-12-31",
+      noReviews: false,
+      token: "tok",
+      fetchFn: mockFetch,
+    });
+
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews[0].id).toBe("in-range");
+  });
+
+  it("skips submitted reviews search when noReviews is true", async () => {
+    const mockFetch = vi.fn().mockImplementation((url, opts) => {
+      const body = JSON.parse(opts?.body ?? "{}");
+      const query = body.query ?? "";
+      if (query.includes("viewer")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { viewer: { login: "me" } } }), text: () => Promise.resolve("") });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: { search: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } } } }),
+        text: () => Promise.resolve(""),
+      });
+    });
+
+    const result = await collectRawGraphQL({
+      start: "2025-01-01",
+      end: "2025-12-31",
+      noReviews: true,
+      token: "tok",
+      fetchFn: mockFetch,
+    });
+
+    expect(result.reviews).toHaveLength(0);
+    // Only viewer + author PR search — no reviewed-by search
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const calls = mockFetch.mock.calls.map(([, opts]) => JSON.parse(opts.body ?? "{}").variables?.q ?? "");
+    expect(calls.some((q) => q.includes("reviewed-by"))).toBe(false);
   });
 });
