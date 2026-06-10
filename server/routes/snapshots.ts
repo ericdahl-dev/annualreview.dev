@@ -15,7 +15,16 @@ import type {
   SnapshotWithEvidence,
   SnapshotPeriod,
 } from "../../lib/snapshot-store.js";
+import {
+  DATE_YYYY_MM_DD,
+  SNAPSHOT_PERIODS,
+} from "../../lib/evidence-archive/period.js";
 import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
+import {
+  createRequireLogin,
+  readJsonBodyOrRespond400,
+  requireEvidenceArchiveConfigured,
+} from "./evidence-archive-helpers.js";
 
 export interface SnapshotsRoutesOptions {
   /** Injected in tests; defaults to streaming JSON from the request. */
@@ -40,14 +49,8 @@ export interface SnapshotsRoutesOptions {
 
 type Next = () => void;
 
-const VALID_PERIODS = new Set<string>(["daily", "weekly", "monthly", "custom"]);
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
-  const {
-    getSessionIdFromRequest,
-    getSession,
-  } = options;
+  const { getSessionIdFromRequest, getSession } = options;
   const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
 
   return async function snapshotsMiddleware(
@@ -56,9 +59,13 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
     next: Next
   ): Promise<void> {
     const rawPath = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
+    const requireLogin = createRequireLogin(
+      req,
+      res,
+      getSessionIdFromRequest,
+      getSession
+    );
 
-    // Resolve the real store functions lazily (so tests can inject mocks without
-    // importing the real module at test time).
     async function getStore() {
       if (
         options.saveSnapshot &&
@@ -77,7 +84,7 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
           isSnapshotStoreConfigured: options.isSnapshotStoreConfigured,
         };
       }
-      const store = await import("../../lib/snapshot-store.js");
+      const store = await import("../../lib/evidence-archive/snapshots-adapter.js");
       return {
         saveSnapshot: store.saveSnapshot,
         listSnapshots: store.listSnapshots,
@@ -88,15 +95,12 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
       };
     }
 
-    // Helper: authenticate and return the user's login, or respond 401.
-    function requireLogin(): string | null {
-      const sessId = getSessionIdFromRequest(req);
-      const session = sessId ? getSession(sessId) : undefined;
-      if (!session?.login) {
-        respondJson(res, 401, { error: "Login required" });
-        return null;
-      }
-      return session.login;
+    function ensureConfigured(isConfigured: () => boolean): boolean {
+      return requireEvidenceArchiveConfigured(
+        res,
+        isConfigured(),
+        "Snapshot store"
+      );
     }
 
     // POST /merge — merge multiple snapshots into combined evidence
@@ -105,18 +109,10 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isSnapshotStoreConfigured()) {
-        respondJson(res, 503, { error: "Snapshot store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isSnapshotStoreConfigured)) return;
 
-      let body: Record<string, unknown>;
-      try {
-        body = (await readJsonBody(req)) as Record<string, unknown>;
-      } catch {
-        respondJson(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
+      const body = await readJsonBodyOrRespond400(req, res, readJsonBody);
+      if (!body) return;
 
       const ids = body.ids;
       if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => typeof id !== "string")) {
@@ -144,10 +140,7 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isSnapshotStoreConfigured()) {
-        respondJson(res, 503, { error: "Snapshot store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isSnapshotStoreConfigured)) return;
 
       try {
         const snapshots = await store.listSnapshots(userLogin);
@@ -165,18 +158,10 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isSnapshotStoreConfigured()) {
-        respondJson(res, 503, { error: "Snapshot store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isSnapshotStoreConfigured)) return;
 
-      let body: Record<string, unknown>;
-      try {
-        body = (await readJsonBody(req)) as Record<string, unknown>;
-      } catch {
-        respondJson(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
+      const body = await readJsonBodyOrRespond400(req, res, readJsonBody);
+      if (!body) return;
 
       const { period, start_date, end_date, evidence, label } = body as {
         period?: string;
@@ -186,15 +171,15 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
         label?: string;
       };
 
-      if (!period || !VALID_PERIODS.has(period)) {
+      if (!period || !SNAPSHOT_PERIODS.has(period)) {
         respondJson(res, 400, { error: "period must be one of: daily, weekly, monthly, custom" });
         return;
       }
-      if (!start_date || !DATE_RE.test(start_date)) {
+      if (!start_date || !DATE_YYYY_MM_DD.test(start_date)) {
         respondJson(res, 400, { error: "start_date must be YYYY-MM-DD" });
         return;
       }
-      if (!end_date || !DATE_RE.test(end_date)) {
+      if (!end_date || !DATE_YYYY_MM_DD.test(end_date)) {
         respondJson(res, 400, { error: "end_date must be YYYY-MM-DD" });
         return;
       }
@@ -237,10 +222,7 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
         if (!userLogin) return;
 
         const store = await getStore();
-        if (!store.isSnapshotStoreConfigured()) {
-          respondJson(res, 503, { error: "Snapshot store not configured (DATABASE_URL missing)" });
-          return;
-        }
+        if (!ensureConfigured(store.isSnapshotStoreConfigured)) return;
 
         try {
           const snapshot = await store.getSnapshot(snapshotId, userLogin);
@@ -262,10 +244,7 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
         if (!userLogin) return;
 
         const store = await getStore();
-        if (!store.isSnapshotStoreConfigured()) {
-          respondJson(res, 503, { error: "Snapshot store not configured (DATABASE_URL missing)" });
-          return;
-        }
+        if (!ensureConfigured(store.isSnapshotStoreConfigured)) return;
 
         try {
           const deleted = await store.deleteSnapshot(snapshotId, userLogin);

@@ -11,11 +11,19 @@
  * Throws on first use if DATABASE_URL is not set.
  */
 
-import type { Evidence, Contribution } from "../types/evidence.js";
-import { getPool, isDbConfigured } from "./db.js";
+import type { Evidence } from "../types/evidence.js";
+import { getPool } from "./db.js";
+import {
+  filterSafeIds,
+  mergeEvidenceHistory,
+  SNAPSHOT_ID_PATTERN,
+} from "./evidence-archive/merge.js";
+import { isEvidenceArchiveConfigured } from "./evidence-archive/config.js";
+import { contributionCount } from "./evidence-archive/json.js";
+import type { SnapshotPeriod } from "./evidence-archive/period.js";
 import { generateId } from "./id.js";
 
-export type SnapshotPeriod = "daily" | "weekly" | "monthly" | "custom";
+export type { SnapshotPeriod } from "./evidence-archive/period.js";
 
 export interface Snapshot {
   id: string;
@@ -47,9 +55,7 @@ export async function saveSnapshot(
   const db = await getPool();
   const id = generateId("snap");
   const createdAt = new Date().toISOString();
-  const contributionCount = Array.isArray(evidence.contributions)
-    ? evidence.contributions.length
-    : 0;
+  const count = contributionCount(evidence);
 
   await db.query(
     `INSERT INTO contribution_snapshots
@@ -62,7 +68,7 @@ export async function saveSnapshot(
       startDate,
       endDate,
       label ?? null,
-      contributionCount,
+      count,
       JSON.stringify(evidence),
       createdAt,
     ]
@@ -132,14 +138,10 @@ export async function mergeSnapshots(
   ids: string[],
   userLogin: string
 ): Promise<Evidence | null> {
-  if (ids.length === 0) return null;
-  // Validate id format to prevent passing unexpected values to the DB
-  const SAFE_ID_RE = /^snap_[a-z0-9_]+$/;
-  const safeIds = ids.filter((id) => typeof id === "string" && SAFE_ID_RE.test(id));
+  const safeIds = filterSafeIds(ids, SNAPSHOT_ID_PATTERN);
   if (safeIds.length === 0) return null;
   const db = await getPool();
 
-  // Use ANY($2::text[]) to pass the ids array as a single parameter
   const result = await db.query<{ evidence: Evidence; start_date: string; end_date: string }>(
     `SELECT evidence, start_date, end_date
      FROM contribution_snapshots
@@ -148,39 +150,12 @@ export async function mergeSnapshots(
     [userLogin, safeIds]
   );
 
-  if (result.rows.length === 0) return null;
-
-  const seen = new Set<string>();
-  const merged: Contribution[] = [];
-  let earliest = result.rows[0].start_date;
-  let latest = result.rows[0].end_date;
-  let roleContext: unknown = undefined;
-
-  for (const row of result.rows) {
-    const ev = row.evidence;
-    if (roleContext === undefined) roleContext = ev.role_context_optional;
-    if (row.start_date < earliest) earliest = row.start_date;
-    if (row.end_date > latest) latest = row.end_date;
-    for (const c of ev.contributions ?? []) {
-      if (!seen.has(c.id)) {
-        seen.add(c.id);
-        merged.push(c);
-      }
-    }
-  }
-
-  const combined: Evidence = {
-    timeframe: { start_date: earliest, end_date: latest },
-    contributions: merged,
-  };
-  if (roleContext !== undefined) {
-    combined.role_context_optional = roleContext;
-  }
-  return combined;
+  return mergeEvidenceHistory(result.rows);
 }
 
+/** @deprecated Use isEvidenceArchiveConfigured from lib/evidence-archive. */
 export function isSnapshotStoreConfigured(): boolean {
-  return isDbConfigured();
+  return isEvidenceArchiveConfigured();
 }
 
 /** Reset the store (for tests). Removes all rows. */

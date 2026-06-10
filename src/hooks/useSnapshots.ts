@@ -1,18 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import type { AuthUser } from "./useAuth.js";
 
-export type SnapshotPeriod = "daily" | "weekly" | "monthly" | "custom";
+import type { Snapshot, SnapshotPeriod } from "../../lib/evidence-archive/types.js";
 
-export interface Snapshot {
-  id: string;
-  user_login: string;
-  period: SnapshotPeriod;
-  start_date: string;
-  end_date: string;
-  label: string | null;
-  contribution_count: number;
-  created_at: string;
-}
+export type { Snapshot, SnapshotPeriod };
 
 interface UseSnapshotsOptions {
   user: AuthUser | null;
