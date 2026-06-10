@@ -1,20 +1,20 @@
 :root {
-  --bg: #14110f;
-  --bg-elevated: #1b1714;
-  --bg-panel: #221d19;
-  --bg-panel-strong: #2b241f;
-  --text: #f4ede3;
-  --text-muted: #b8ae9e;
-  --accent: #cb9440;
-  --accent-soft: #f0c98a;
-  --accent-dim: #9e6c24;
-  --accent-cool: #8ca2c4;
-  --accent-warm: #d27a4e;
-  --border: rgba(255, 241, 222, 0.12);
-  --border-strong: rgba(255, 241, 222, 0.22);
-  --shadow: rgba(20, 13, 8, 0.42);
-  --font-sans: "Manrope", system-ui, -apple-system, sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  --bg: #0f1722;
+  --bg-elevated: #141e2a;
+  --bg-panel: #182331;
+  --bg-panel-strong: #223247;
+  --text: #ecf1f8;
+  --text-muted: #97a6bb;
+  --accent: #79a6ff;
+  --accent-soft: #b7cbff;
+  --accent-dim: #5e86d8;
+  --accent-cool: #74c1cf;
+  --accent-warm: #a6b2c4;
+  --border: rgba(205, 219, 240, 0.12);
+  --border-strong: rgba(205, 219, 240, 0.2);
+  --shadow: rgba(3, 10, 20, 0.3);
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-display: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", "SF Mono", "Fira Code", "Cascadia Code", monospace;
 }
 
@@ -50,29 +50,14 @@ body {
   line-height: 1.65;
   color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(203, 148, 64, 0.16), transparent 30%),
-    radial-gradient(circle at 85% 15%, rgba(140, 162, 196, 0.1), transparent 22%),
-    linear-gradient(180deg, #181411 0%, #14110f 42%, #110f0d 100%);
+    radial-gradient(circle at top left, rgba(121, 166, 255, 0.12), transparent 26%),
+    linear-gradient(180deg, #121b27 0%, #0f1722 45%, #0d141d 100%);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 #root {
   min-height: 100vh;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 24px 24px;
-  mask-image: radial-gradient(circle at center, black, transparent 78%);
-  pointer-events: none;
-  opacity: 0.18;
-  z-index: -1;
 }
 
 a {
@@ -98,7 +83,7 @@ img {
 }
 
 ::selection {
-  background: rgba(203, 148, 64, 0.28);
+  background: rgba(121, 166, 255, 0.22);
   color: var(--text);
 }
 

@@ -29,9 +29,9 @@ const FEATURES = [
 ];
 
 const SIGNALS = [
-  "PR-linked claims",
-  "CLI or browser flow",
-  "Needs-confirmation guardrails",
+  "PR-linked output",
+  "Markdown export",
+  "CLI-friendly",
 ];
 
 const TRUST_POINTS = [
@@ -128,7 +128,7 @@ export default function Landing() {
           <div className="nav-links">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
-            <span className="nav-note">Evidence-backed review writer</span>
+            <span className="nav-note">For developers</span>
             <a
               href="/generate"
               className="nav-cta"
@@ -186,29 +186,29 @@ export default function Landing() {
             </div>
             <aside className="hero-panel" aria-label="Review output preview">
               <div className="hero-panel-top">
-                <span className="hero-panel-label">Output preview</span>
-                <span className="hero-panel-state">PR-backed</span>
+                <span className="hero-panel-label">Sample output</span>
+                <span className="hero-panel-state">Evidence linked</span>
               </div>
               <div className="hero-panel-summary">
                 <p className="hero-panel-kicker">What the app does</p>
                 <h2 className="hero-panel-title">
-                  Pulls a review narrative out of work that already happened.
+                  Turns GitHub activity into review-ready output you can defend.
                 </h2>
                 <p className="hero-panel-desc">
-                  Group related pull requests, shape them into manager-readable
-                  bullets, and keep weak claims clearly labeled.
+                  Group related pull requests, shape them into clear bullets,
+                  and keep uncertain impact explicitly labeled.
                 </p>
               </div>
               <div className="hero-panel-stack">
                 <div className="hero-panel-item">
                   <span className="hero-panel-item-label">Theme</span>
-                  <p>Platform reliability work surfaced as one coherent thread.</p>
+                  <p>Reliability work grouped into one readable theme.</p>
                 </div>
                 <div className="hero-panel-item">
                   <span className="hero-panel-item-label">Bullet</span>
                   <p>
-                    Hardened webhook delivery with retry logic and linked the
-                    claim to the PR that shipped it.
+                    Added retry logic to webhook delivery and linked the claim
+                    to the PR that shipped it.
                   </p>
                 </div>
                 <div className="hero-panel-item hero-panel-item-warning">
