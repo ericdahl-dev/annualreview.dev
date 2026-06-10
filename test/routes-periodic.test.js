@@ -25,7 +25,7 @@ function makeOptions(overrides = {}) {
     respondJson,
     getSessionIdFromRequest: () => null,
     getSession: () => undefined,
-    collectAndNormalize: vi.fn().mockResolvedValue(SAMPLE_EVIDENCE),
+    intakeFromGitHub: vi.fn().mockResolvedValue(SAMPLE_EVIDENCE),
     runDailySummary: vi.fn().mockResolvedValue(SAMPLE_DAILY_JSON),
     runWeeklyRollup: vi.fn().mockResolvedValue(JSON.stringify({
       week_start: "2025-01-13",
@@ -153,7 +153,7 @@ describe("periodicRoutes – POST /collect-day", () => {
       getSessionIdFromRequest: () => "sess1",
       getSession: () => SESSION,
       readJsonBody: vi.fn().mockResolvedValue({ date: "2025-01-15" }),
-      collectAndNormalize: mockCollect,
+      intakeFromGitHub: mockCollect,
       runDailySummary: mockSummary,
       saveDailySummary: mockSave,
     });
@@ -180,7 +180,7 @@ describe("periodicRoutes – POST /collect-day", () => {
       getSessionIdFromRequest: () => "sess1",
       getSession: () => SESSION, // has access_token: "gh_tok"
       readJsonBody: vi.fn().mockResolvedValue({ date: "2025-01-15" }),
-      collectAndNormalize: mockCollect,
+      intakeFromGitHub: mockCollect,
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("POST", "/collect-day");

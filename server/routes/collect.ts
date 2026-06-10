@@ -4,8 +4,16 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
+import type { Evidence } from "../../types/evidence.js";
 import type { SessionData } from "../../lib/session-store.js";
-import { readJsonBody, respondJson, DATE_YYYY_MM_DD } from "../helpers.js";
+import {
+  EvidenceIntakeError,
+  intakeFromGitHub,
+  parseTimeframe,
+  resolveGitHubToken,
+  type IntakeFromGitHubOptions,
+} from "../../lib/evidence-intake.js";
+import { readJsonBody, respondJson } from "../helpers.js";
 
 export interface CollectRoutesOptions {
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
@@ -15,11 +23,7 @@ export interface CollectRoutesOptions {
     jobId: string,
     fn: () => void | Promise<unknown>
   ) => void;
-  collectAndNormalize: (opts: {
-    token: string;
-    start_date: string;
-    end_date: string;
-  }) => Promise<unknown>;
+  intakeFromGitHub?: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
 }
 
 type Next = () => void;
@@ -30,8 +34,8 @@ export function collectRoutes(options: CollectRoutesOptions) {
     getSession,
     createJob,
     runInBackground,
-    collectAndNormalize,
   } = options;
+  const runIntake = options.intakeFromGitHub ?? intakeFromGitHub;
 
   return async function collectMiddleware(
     req: IncomingMessage,
@@ -48,30 +52,28 @@ export function collectRoutes(options: CollectRoutesOptions) {
         end_date?: string;
         token?: string;
       };
-      const { start_date, end_date } = body;
-      if (
-        !start_date ||
-        !end_date ||
-        !DATE_YYYY_MM_DD.test(start_date) ||
-        !DATE_YYYY_MM_DD.test(end_date)
-      ) {
-        respondJson(res, 400, {
-          error: "start_date and end_date must be YYYY-MM-DD",
-        });
-        return;
-      }
       const sessionId = getSessionIdFromRequest(req);
       const session = sessionId ? getSession(sessionId) : undefined;
-      const token = body.token ?? session?.access_token;
-      if (!token || typeof token !== "string") {
-        respondJson(res, 401, {
-          error: "token required (sign in with GitHub or send token in body)",
+      let start_date: string;
+      let end_date: string;
+      let token: string;
+      try {
+        ({ start_date, end_date } = parseTimeframe(body.start_date, body.end_date));
+        token = resolveGitHubToken({
+          body: body.token,
+          session: session?.access_token,
         });
-        return;
+      } catch (e) {
+        if (e instanceof EvidenceIntakeError) {
+          const status = e.message.includes("token") ? 401 : 400;
+          respondJson(res, status, { error: e.message });
+          return;
+        }
+        throw e;
       }
       const jobId = createJob("collect", sessionId ?? undefined);
       runInBackground(jobId, () =>
-        collectAndNormalize({ token, start_date, end_date })
+        runIntake({ token, start_date, end_date })
       );
       respondJson(res, 202, { job_id: jobId });
     } catch (e) {
