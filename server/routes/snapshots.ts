@@ -8,7 +8,6 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import type { SessionData } from "../../lib/session-store.js";
 import type { Evidence } from "../../types/evidence.js";
 import type {
   Snapshot,
@@ -19,20 +18,16 @@ import {
   DATE_YYYY_MM_DD,
   SNAPSHOT_PERIODS,
 } from "../../lib/evidence-archive/period.js";
-import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
+import { readJsonBody, respondJson } from "../helpers.js";
+import type { SessionService } from "../route-services.js";
 import {
   createRequireLogin,
   readJsonBodyOrRespond400,
   requireEvidenceArchiveConfigured,
 } from "./evidence-archive-helpers.js";
 
-export interface SnapshotsRoutesOptions {
-  /** Injected in tests; defaults to streaming JSON from the request. */
-  readJsonBody?: (req: IncomingMessage) => Promise<object>;
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
-  getSession: (id: string) => SessionData | undefined;
-  /** Injected for tests; defaults to real snapshot-store functions when not provided. */
-  saveSnapshot?: (
+export interface SnapshotService {
+  saveSnapshot: (
     userLogin: string,
     period: SnapshotPeriod,
     startDate: string,
@@ -40,18 +35,23 @@ export interface SnapshotsRoutesOptions {
     evidence: Evidence,
     label?: string
   ) => Promise<string>;
-  listSnapshots?: (userLogin: string) => Promise<Snapshot[]>;
-  getSnapshot?: (id: string, userLogin: string) => Promise<SnapshotWithEvidence | null>;
-  deleteSnapshot?: (id: string, userLogin: string) => Promise<boolean>;
-  mergeSnapshots?: (ids: string[], userLogin: string) => Promise<Evidence | null>;
-  isSnapshotStoreConfigured?: () => boolean;
+  listSnapshots: (userLogin: string) => Promise<Snapshot[]>;
+  getSnapshot: (id: string, userLogin: string) => Promise<SnapshotWithEvidence | null>;
+  deleteSnapshot: (id: string, userLogin: string) => Promise<boolean>;
+  mergeSnapshots: (ids: string[], userLogin: string) => Promise<Evidence | null>;
+  isSnapshotStoreConfigured: () => boolean;
+}
+
+export interface SnapshotsRoutesOptions {
+  session: SessionService;
+  /** Injected in tests; production uses the snapshot-store adapter. */
+  snapshots?: SnapshotService;
 }
 
 type Next = () => void;
 
 export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
-  const { getSessionIdFromRequest, getSession } = options;
-  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
+  const { session } = options;
 
   return async function snapshotsMiddleware(
     req: IncomingMessage,
@@ -59,31 +59,10 @@ export function snapshotsRoutes(options: SnapshotsRoutesOptions) {
     next: Next
   ): Promise<void> {
     const rawPath = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
-    const requireLogin = createRequireLogin(
-      req,
-      res,
-      getSessionIdFromRequest,
-      getSession
-    );
+    const requireLogin = createRequireLogin(req, res, session);
 
-    async function getStore() {
-      if (
-        options.saveSnapshot &&
-        options.listSnapshots &&
-        options.getSnapshot &&
-        options.deleteSnapshot &&
-        options.mergeSnapshots &&
-        options.isSnapshotStoreConfigured
-      ) {
-        return {
-          saveSnapshot: options.saveSnapshot,
-          listSnapshots: options.listSnapshots,
-          getSnapshot: options.getSnapshot,
-          deleteSnapshot: options.deleteSnapshot,
-          mergeSnapshots: options.mergeSnapshots,
-          isSnapshotStoreConfigured: options.isSnapshotStoreConfigured,
-        };
-      }
+    async function getStore(): Promise<SnapshotService> {
+      if (options.snapshots) return options.snapshots;
       const store = await import("../../lib/evidence-archive/snapshots-adapter.js");
       return {
         saveSnapshot: store.saveSnapshot,

@@ -9,20 +9,22 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import type { SessionData } from "../../lib/session-store.js";
 import Stripe from "stripe";
 import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
 import { getDefaultModels } from "../../lib/narrative-model-runner.js";
 import { STRIPE_API_VERSION } from "../config.js";
 import { respondJson } from "../helpers.js";
+import type { SessionService } from "../route-services.js";
 
-export interface PaymentsRoutesOptions {
+export interface PaymentsService {
   getStripe?: () => Stripe | null;
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
-  getSession: (id: string) => SessionData | undefined;
-  /** Optional for tests; when not provided uses real payment store (requires DATABASE_URL). */
   awardCredits?: (userLogin: string, sessionId: string) => Promise<void>;
   getCredits?: (userLogin: string) => Promise<number>;
+}
+
+export interface PaymentsRoutesOptions {
+  session: SessionService;
+  payments?: PaymentsService;
 }
 
 type Next = () => void;
@@ -44,13 +46,10 @@ function getStripeClient(): Stripe | null {
 }
 
 export function paymentsRoutes(options: PaymentsRoutesOptions) {
-  const {
-    getStripe = getStripeClient,
-    getSessionIdFromRequest,
-    getSession,
-    awardCredits: awardCreditsFn = awardCredits,
-    getCredits: getCreditsFn = getCredits,
-  } = options;
+  const { session, payments = {} } = options;
+  const getStripe = payments.getStripe ?? getStripeClient;
+  const awardCreditsFn = payments.awardCredits ?? awardCredits;
+  const getCreditsFn = payments.getCredits ?? getCredits;
 
   return async function paymentsMiddleware(
     req: IncomingMessage,
@@ -74,8 +73,8 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
 
     // GET /credits or GET /credits/:anything – returns remaining credits for the logged-in user
     if ((path === "credits" || path.startsWith("credits/")) && req.method === "GET") {
-      const sessId = getSessionIdFromRequest(req);
-      const userSession = sessId ? getSession(sessId) : undefined;
+      const sessId = session.getSessionIdFromRequest(req);
+      const userSession = sessId ? session.getSession(sessId) : undefined;
       if (!userSession?.login) {
         respondJson(res, 401, { error: "Login required" });
         return;
@@ -90,8 +89,8 @@ export function paymentsRoutes(options: PaymentsRoutesOptions) {
         return;
       }
       // Require the user to be logged in before purchasing credits
-      const sessId = getSessionIdFromRequest(req);
-      const userSession = sessId ? getSession(sessId) : undefined;
+      const sessId = session.getSessionIdFromRequest(req);
+      const userSession = sessId ? session.getSession(sessId) : undefined;
       if (!userSession?.login) {
         respondJson(res, 401, { error: "Login required to purchase premium credits" });
         return;

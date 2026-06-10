@@ -3,14 +3,46 @@ import { collectRoutes } from "../server/routes/collect.ts";
 import { mockRes, mockReq } from "./helpers.js";
 
 function makeOptions(overrides = {}) {
-  return {
-    getSessionIdFromRequest: () => null,
-    getSession: () => undefined,
+  const {
+    getSessionIdFromRequest,
+    getSession,
+    createJob,
+    runInBackground,
+    intakeFromGitHub,
+    session: sessionOverrides,
+    jobs: jobsOverrides,
+    collect: collectOverrides,
+  } = overrides;
+
+  const jobs = {
     createJob: vi.fn().mockReturnValue("job_1"),
     runInBackground: vi.fn(),
-    intakeFromGitHub: vi.fn().mockResolvedValue({ contributions: [] }),
-    ...overrides,
+    ...(createJob ? { createJob } : {}),
+    ...(runInBackground ? { runInBackground } : {}),
+    ...(jobsOverrides || {}),
   };
+
+  const options = {
+    session: {
+      getSessionIdFromRequest: () => null,
+      getSession: () => undefined,
+      ...(getSessionIdFromRequest !== undefined ? { getSessionIdFromRequest } : {}),
+      ...(getSession !== undefined ? { getSession } : {}),
+      ...(sessionOverrides || {}),
+    },
+    jobs,
+    collect: {
+      intakeFromGitHub: vi.fn().mockResolvedValue({ contributions: [] }),
+      ...(intakeFromGitHub ? { intakeFromGitHub } : {}),
+      ...(collectOverrides || {}),
+    },
+  };
+
+  options.createJob = jobs.createJob;
+  options.runInBackground = jobs.runInBackground;
+  options.intakeFromGitHub = options.collect.intakeFromGitHub;
+
+  return options;
 }
 
 describe("collectRoutes – POST /", () => {
@@ -84,7 +116,6 @@ describe("collectRoutes – POST /", () => {
 
   it("returns 500 on unexpected errors", async () => {
     const handler = collectRoutes(makeOptions());
-    // Send invalid JSON to trigger parse error
     const badReq = {
       method: "POST",
       url: "/",

@@ -1,15 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getCreditsPerPurchase } from "../lib/payment-store.ts";
 import { paymentsRoutes } from "../server/routes/payments.ts";
-import { mockRes, mockReq, respondJson } from "./helpers.js";
+import { mockRes, mockReq } from "./helpers.js";
 
 function makeRouteOptions(overrides = {}) {
+  const {
+    getSessionIdFromRequest,
+    getSession,
+    getStripe,
+    awardCredits,
+    getCredits,
+    session: sessionOverrides,
+    payments: paymentsOverrides,
+  } = overrides;
+
   return {
-    respondJson,
-    getStripe: () => null,
-    getSessionIdFromRequest: () => null,
-    getSession: () => undefined,
-    ...overrides,
+    session: {
+      getSessionIdFromRequest: () => null,
+      getSession: () => undefined,
+      ...(getSessionIdFromRequest !== undefined ? { getSessionIdFromRequest } : {}),
+      ...(getSession !== undefined ? { getSession } : {}),
+      ...(sessionOverrides || {}),
+    },
+    payments: {
+      getStripe: () => null,
+      ...(getStripe !== undefined ? { getStripe } : {}),
+      ...(awardCredits ? { awardCredits } : {}),
+      ...(getCredits ? { getCredits } : {}),
+      ...(paymentsOverrides || {}),
+    },
   };
 }
 

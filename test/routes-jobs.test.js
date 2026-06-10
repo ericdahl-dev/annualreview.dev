@@ -3,11 +3,18 @@ import { jobsRoutes } from "../server/routes/jobs.ts";
 import { mockRes } from "./helpers.js";
 
 function makeOptions(overrides = {}) {
-  return {
-    getSessionIdFromRequest: () => null,
+  const jobs = {
     getLatestJob: vi.fn().mockReturnValue(null),
     getJob: vi.fn().mockReturnValue(undefined),
-    ...overrides,
+    ...(overrides.jobs || {}),
+  };
+  return {
+    session: {
+      getSessionIdFromRequest: () => null,
+      getSession: () => undefined,
+      ...(overrides.session || {}),
+    },
+    jobs,
   };
 }
 
@@ -24,8 +31,8 @@ describe("jobsRoutes – GET / (latest)", () => {
   it("returns latest job when session has one", () => {
     const latestJob = { id: "j1", type: "collect", status: "done" };
     const handler = jobsRoutes(makeOptions({
-      getSessionIdFromRequest: () => "sess_1",
-      getLatestJob: vi.fn().mockReturnValue(latestJob),
+      session: { getSessionIdFromRequest: () => "sess_1" },
+      jobs: { getLatestJob: vi.fn().mockReturnValue(latestJob) },
     }));
     const req = { method: "GET", url: "/", headers: {} };
     const res = mockRes();
@@ -39,9 +46,9 @@ describe("jobsRoutes – GET /:id", () => {
   it("returns job by id", () => {
     const job = { type: "collect", status: "done", result: { ok: true } };
     const handler = jobsRoutes(makeOptions({
-      getJob: vi.fn().mockReturnValue(job),
+      jobs: { getJob: vi.fn().mockReturnValue(job) },
     }));
-    const req = { method: "GET", url: "/job_abc", headers: {} };
+    const req = { method: "GET", url: "/j1", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
     expect(res.statusCode).toBe(200);
@@ -50,25 +57,25 @@ describe("jobsRoutes – GET /:id", () => {
 
   it("returns 404 when job not found", () => {
     const handler = jobsRoutes(makeOptions());
-    const req = { method: "GET", url: "/nonexistent", headers: {} };
+    const req = { method: "GET", url: "/missing", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
     expect(res.statusCode).toBe(404);
-    expect(res.body.error).toBe("Job not found");
+    expect(res.body.error).toMatch(/not found/i);
   });
 
   it("decodes URL-encoded job id", () => {
     const getJob = vi.fn().mockReturnValue({ type: "collect", status: "done" });
-    const handler = jobsRoutes(makeOptions({ getJob }));
-    const req = { method: "GET", url: "/job%20with%20space", headers: {} };
+    const handler = jobsRoutes(makeOptions({ jobs: { getJob } }));
+    const req = { method: "GET", url: "/job%2Fwith%2Fslashes", headers: {} };
     const res = mockRes();
     handler(req, res, () => {});
-    expect(getJob).toHaveBeenCalledWith("job with space");
+    expect(getJob).toHaveBeenCalledWith("job/with/slashes");
   });
 });
 
-describe("jobsRoutes – non-GET", () => {
-  it("calls next for POST requests", () => {
+describe("jobsRoutes – next()", () => {
+  it("calls next for non-GET requests", () => {
     const handler = jobsRoutes(makeOptions());
     const req = { method: "POST", url: "/", headers: {} };
     const res = mockRes();

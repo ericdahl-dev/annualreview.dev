@@ -3,18 +3,17 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import type { SessionData } from "../../lib/session-store.js";
+import type { SessionService } from "../route-services.js";
 import { respondJson } from "../helpers.js";
 
 export function createRequireLogin(
   req: IncomingMessage,
   res: ServerResponse,
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null,
-  getSession: (id: string) => SessionData | undefined
+  sessionService: SessionService
 ): () => string | null {
   return () => {
-    const sessId = getSessionIdFromRequest(req);
-    const session = sessId ? getSession(sessId) : undefined;
+    const sessId = sessionService.getSessionIdFromRequest(req);
+    const session = sessId ? sessionService.getSession(sessId) : undefined;
     if (!session?.login) {
       respondJson(res, 401, { error: "Login required" });
       return null;
