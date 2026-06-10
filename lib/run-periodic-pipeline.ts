@@ -6,42 +6,29 @@
  *   runWeeklyRollup(dailySummaries[])   → JSON string (weekly rollup)
  *   runMonthlyRollup(weeklySummaries[]) → JSON string (monthly rollup)
  *
- * Uses the same OpenRouter/OpenAI setup as run-pipeline.ts.
- * Requires OPENROUTER_API_KEY (falls back to OPENAI_API_KEY).
+ * Adapters over narrative-model-runner. Requires OPENROUTER_API_KEY
+ * (falls back to OPENAI_API_KEY).
  */
 
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import OpenAI from "openai";
 import type { Evidence } from "../types/evidence.js";
-import { extractJson, getDefaultModels } from "./run-pipeline.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = join(__dirname, "..", "prompts");
-
-function loadPrompt(name: string): string {
-  return readFileSync(join(PROMPTS_DIR, name), "utf8").trim();
-}
-
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-
-function makeClient(apiKey: string, baseURL?: string): OpenAI {
-  const opts: ConstructorParameters<typeof OpenAI>[0] = { apiKey };
-  if (baseURL) {
-    opts.baseURL = baseURL;
-    opts.defaultHeaders = {
-      "HTTP-Referer": "https://annualreview.dev",
-      "X-Title": "AnnualReview.dev",
-    };
-  }
-  return new OpenAI(opts);
-}
+import {
+  extractJson,
+  loadPrompt,
+  OPENROUTER_BASE,
+  resolveModel,
+  runNarrativeJsonPrompt,
+} from "./narrative-model-runner.js";
 
 export interface PeriodicPipelineOptions {
   apiKey?: string;
   model?: string;
   baseURL?: string;
+}
+
+function resolvePeriodicApiKey(apiKey?: string): string {
+  const resolved = apiKey ?? process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY;
+  if (!resolved) throw new Error("OPENROUTER_API_KEY required for periodic pipeline");
+  return resolved;
 }
 
 /**
@@ -51,18 +38,16 @@ export interface PeriodicPipelineOptions {
 export async function runDailySummary(
   evidence: Evidence,
   {
-    apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY,
+    apiKey,
     model,
     baseURL = OPENROUTER_BASE,
   }: PeriodicPipelineOptions = {}
 ): Promise<string> {
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY required for periodic pipeline");
-  const resolvedModel = model ?? getDefaultModels().free;
-  const openai = makeClient(apiKey, baseURL);
-  const prompt = loadPrompt("50_daily_summary.md");
+  const resolvedApiKey = resolvePeriodicApiKey(apiKey);
+  const resolvedModel = resolveModel({ model, premium: false });
+  const promptContent = loadPrompt("50_daily_summary.md");
 
-  // Slim the evidence down — daily runs are small by definition
-  const input = JSON.stringify({
+  const inputJson = JSON.stringify({
     timeframe: evidence.timeframe,
     contributions: evidence.contributions.map((c) => ({
       id: c.id,
@@ -76,17 +61,15 @@ export async function runDailySummary(
     })),
   });
 
-  const completion = await openai.chat.completions.create({
+  return runNarrativeJsonPrompt({
+    apiKey: resolvedApiKey,
+    baseURL,
     model: resolvedModel,
-    messages: [
-      { role: "user", content: `${prompt}\n\nINPUT JSON:\n${input}` },
-    ],
+    promptContent,
+    inputJson,
+    emptyContentError: "Daily summary pipeline returned no content",
+    wrapJsonErrors: false,
   });
-
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw?.trim()) throw new Error("Daily summary pipeline returned no content");
-  extractJson(raw); // validate JSON
-  return raw;
 }
 
 /**
@@ -98,37 +81,34 @@ export async function runWeeklyRollup(
   weekEndDate: string,
   dailySummaryJsons: string[],
   {
-    apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY,
+    apiKey,
     model,
     baseURL = OPENROUTER_BASE,
   }: PeriodicPipelineOptions = {}
 ): Promise<string> {
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY required for periodic pipeline");
-  const resolvedModel = model ?? getDefaultModels().free;
-  const openai = makeClient(apiKey, baseURL);
-  const prompt = loadPrompt("51_weekly_rollup.md");
+  const resolvedApiKey = resolvePeriodicApiKey(apiKey);
+  const resolvedModel = resolveModel({ model, premium: false });
+  const promptContent = loadPrompt("51_weekly_rollup.md");
 
   const parsedDailies = dailySummaryJsons.map((s) => {
     try { return extractJson(s); } catch { return { headline: "No data", bullets: [] }; }
   });
 
-  const input = JSON.stringify({
+  const inputJson = JSON.stringify({
     week_start: weekStart,
     week_end: weekEndDate,
     daily_summaries: parsedDailies,
   });
 
-  const completion = await openai.chat.completions.create({
+  return runNarrativeJsonPrompt({
+    apiKey: resolvedApiKey,
+    baseURL,
     model: resolvedModel,
-    messages: [
-      { role: "user", content: `${prompt}\n\nINPUT JSON:\n${input}` },
-    ],
+    promptContent,
+    inputJson,
+    emptyContentError: "Weekly rollup pipeline returned no content",
+    wrapJsonErrors: false,
   });
-
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw?.trim()) throw new Error("Weekly rollup pipeline returned no content");
-  extractJson(raw); // validate JSON
-  return raw;
 }
 
 /**
@@ -139,34 +119,31 @@ export async function runMonthlyRollup(
   month: string,
   weeklySummaryJsons: string[],
   {
-    apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY,
+    apiKey,
     model,
     baseURL = OPENROUTER_BASE,
   }: PeriodicPipelineOptions = {}
 ): Promise<string> {
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY required for periodic pipeline");
-  const resolvedModel = model ?? getDefaultModels().free;
-  const openai = makeClient(apiKey, baseURL);
-  const prompt = loadPrompt("52_monthly_rollup.md");
+  const resolvedApiKey = resolvePeriodicApiKey(apiKey);
+  const resolvedModel = resolveModel({ model, premium: false });
+  const promptContent = loadPrompt("52_monthly_rollup.md");
 
   const parsedWeeklies = weeklySummaryJsons.map((s) => {
     try { return extractJson(s); } catch { return { headline: "No data", themes: [] }; }
   });
 
-  const input = JSON.stringify({
+  const inputJson = JSON.stringify({
     month,
     weekly_summaries: parsedWeeklies,
   });
 
-  const completion = await openai.chat.completions.create({
+  return runNarrativeJsonPrompt({
+    apiKey: resolvedApiKey,
+    baseURL,
     model: resolvedModel,
-    messages: [
-      { role: "user", content: `${prompt}\n\nINPUT JSON:\n${input}` },
-    ],
+    promptContent,
+    inputJson,
+    emptyContentError: "Monthly rollup pipeline returned no content",
+    wrapJsonErrors: false,
   });
-
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw?.trim()) throw new Error("Monthly rollup pipeline returned no content");
-  extractJson(raw); // validate JSON
-  return raw;
 }

@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
 import Stripe from "stripe";
 import { awardCredits, getCredits, getCreditsPerPurchase } from "../../lib/payment-store.js";
-import { getDefaultModels } from "../../lib/run-pipeline.js";
+import { getDefaultModels } from "../../lib/narrative-model-runner.js";
 import { STRIPE_API_VERSION } from "../config.js";
 import { respondJson } from "../helpers.js";
 
