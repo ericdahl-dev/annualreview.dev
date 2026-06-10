@@ -2,6 +2,8 @@
 
 The repo includes `nixpacks.toml` so Nixpacks runs `yarn build` and then `yarn start` (the Node server). That way the API routes exist in production; without it, Nixpacks might only serve static files and Connect would 404.
 
+`nixpacks.toml` pins Node **22.22+** (required by `@posthog/ai`), disables the Nixpacks Caddy SPA layer (`NIXPACKS_SPA_CADDY=false`) so the container runs `yarn start` instead of serving static files only, and ensures devDependencies install during the build (Vite) while keeping `tsx` as a runtime dependency for `server.ts`.
+
 1. **Build & start** (handled by Nixpacks via `nixpacks.toml`)
    - Build: `yarn build`
    - Start: `yarn start` (Node server serves `dist/` + `/api/*`)
