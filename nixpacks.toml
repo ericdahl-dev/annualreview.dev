@@ -1,9 +1,17 @@
 # Coolify/Nixpacks: build Vite app then run Node server (API + static).
 # Without this, Nixpacks may treat the app as static-only and not run server.ts.
-# Nixpacks Node 22 image is 22.19.x; @posthog/ai wants >=22.22.0. Ignore engine check so install succeeds.
+# Default Nixpacks Node 22 is 22.19.x; @posthog/ai requires >=22.22.0.
+
+[phases.setup]
+nixpkgsArchive = "f3dfef5ce7283255d11e2327b9fdf08c660dabe8"
+
+[variables]
+NIXPACKS_SPA_CADDY = "false"
+NPM_CONFIG_PRODUCTION = "false"
+YARN_PRODUCTION = "false"
 
 [phases.install]
-cmds = ["yarn install --frozen-lockfile --ignore-engines"]
+cmds = ["yarn install --frozen-lockfile --ignore-engines --production=false"]
 
 [phases.build]
 cmds = ["yarn build"]
