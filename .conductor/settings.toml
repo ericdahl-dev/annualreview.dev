@@ -1,0 +1,7 @@
+#:schema https://conductor.build/schemas/settings.repo.schema.json
+
+[scripts]
+setup = "yarn install --frozen-lockfile && test -f \"$CONDUCTOR_ROOT_PATH/.env\" && ln -sf \"$CONDUCTOR_ROOT_PATH/.env\" .env || true"
+run = "yarn dev --port $CONDUCTOR_PORT"
+archive = "true"
+run_mode = "concurrent"
