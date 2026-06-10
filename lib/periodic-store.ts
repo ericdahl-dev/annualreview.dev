@@ -16,10 +16,19 @@
  */
 
 import type { Evidence } from "../types/evidence.js";
-import { getPool, isDbConfigured } from "./db.js";
+import { getPool } from "./db.js";
+import { isEvidenceArchiveConfigured } from "./evidence-archive/config.js";
+import { contributionCount } from "./evidence-archive/json.js";
+import {
+  toWeekKey,
+  weekStart,
+  weekEnd,
+  type ArchivePeriodType,
+} from "./evidence-archive/period.js";
 import { generateId } from "./id.js";
 
-export type PeriodType = "daily" | "weekly" | "monthly";
+export type PeriodType = ArchivePeriodType;
+export { toWeekKey, weekStart, weekEnd } from "./evidence-archive/period.js";
 
 export interface PeriodicSummary {
   id: string;
@@ -42,43 +51,6 @@ export interface PeriodicSummaryWithEvidence extends PeriodicSummary {
   evidence: Evidence | null;
 }
 
-const MS_PER_DAY = 86400000;
-const MS_PER_WEEK = 7 * MS_PER_DAY;
-
-/** Derive ISO week key "YYYY-WNN" from a date string "YYYY-MM-DD". */
-export function toWeekKey(date: string): string {
-  const d = new Date(date + "T12:00:00Z"); // noon UTC avoids DST edge cases
-  // Move to the Thursday of this week (ISO rule: week belongs to the year of its Thursday)
-  const dayOfWeek = d.getUTCDay() || 7; // Sun=0 → 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayOfWeek);
-  // Now d is Thursday of the ISO week; its year is the ISO year
-  const isoYear = d.getUTCFullYear();
-  // Find the Monday of ISO week 1: the Monday of the week containing Jan 4
-  const jan4 = new Date(Date.UTC(isoYear, 0, 4)); // Jan 4 is always in week 1
-  const jan4DayOfWeek = jan4.getUTCDay() || 7;
-  const week1Monday = new Date(jan4);
-  week1Monday.setUTCDate(jan4.getUTCDate() - jan4DayOfWeek + 1);
-  // Use Math.floor: d is at noon, week1Monday at midnight — floor avoids rounding across midnight
-  const weekNum = Math.floor((d.getTime() - week1Monday.getTime()) / MS_PER_WEEK) + 1;
-  return `${isoYear}-W${String(weekNum).padStart(2, "0")}`;
-}
-
-/** Derive the Monday (start) of the ISO week containing `date`. */
-export function weekStart(date: string): string {
-  const d = new Date(date + "T12:00:00Z");
-  const day = d.getUTCDay() || 7; // Sun=0 → 7
-  d.setUTCDate(d.getUTCDate() - (day - 1));
-  return d.toISOString().slice(0, 10);
-}
-
-/** Derive the Sunday (end) of the ISO week containing `date`. */
-export function weekEnd(date: string): string {
-  const d = new Date(date + "T12:00:00Z");
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + (7 - day));
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Save or replace the daily summary for a calendar date.
  * If a summary already exists for this user+date it is overwritten (upsert).
@@ -92,9 +64,7 @@ export async function saveDailySummary(
   const db = await getPool();
   const id = generateId("pday");
   const createdAt = new Date().toISOString();
-  const contributionCount = Array.isArray(evidence.contributions)
-    ? evidence.contributions.length
-    : 0;
+  const count = contributionCount(evidence);
 
   await db.query(
     `INSERT INTO periodic_summaries
@@ -114,7 +84,7 @@ export async function saveDailySummary(
       date,            // period_key
       date,            // start_date
       date,            // end_date
-      contributionCount,
+      count,
       summary,
       JSON.stringify(evidence),
       createdAt,
@@ -357,8 +327,9 @@ export async function deletePeriodicSummary(
   return (result.rowCount ?? 0) > 0;
 }
 
+/** @deprecated Use isEvidenceArchiveConfigured from lib/evidence-archive. */
 export function isPeriodicStoreConfigured(): boolean {
-  return isDbConfigured();
+  return isEvidenceArchiveConfigured();
 }
 
 /** Clear all rows (for tests). */

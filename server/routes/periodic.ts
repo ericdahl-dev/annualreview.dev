@@ -28,8 +28,20 @@ import type {
   PeriodicSummaryWithEvidence,
   PeriodType,
 } from "../../lib/periodic-store.js";
-import { weekStart, weekEnd } from "../../lib/periodic-store.js";
+import {
+  DATE_YYYY_MM_DD,
+  MONTH_YYYY_MM,
+  PERIODIC_PERIOD_TYPES,
+  weekStart,
+  weekEnd,
+} from "../../lib/evidence-archive/period.js";
+import { tryParseJson } from "../../lib/evidence-archive/json.js";
 import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
+import {
+  createRequireLogin,
+  readJsonBodyOrRespond400,
+  requireEvidenceArchiveConfigured,
+} from "./evidence-archive-helpers.js";
 
 export interface PeriodicRoutesOptions {
   /** Injected in tests; defaults to streaming JSON from the request. */
@@ -54,9 +66,6 @@ export interface PeriodicRoutesOptions {
 
 type Next = () => void;
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MONTH_RE = /^\d{4}-\d{2}$/;
-const VALID_PERIOD_TYPES = new Set(["daily", "weekly", "monthly"]);
 const DEFAULT_SUMMARIES_LIMIT = 90;
 const MAX_SUMMARIES_LIMIT = 365;
 
@@ -98,7 +107,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
     }
 
     const [store, pipeline] = await Promise.all([
-      import("../../lib/periodic-store.js"),
+      import("../../lib/evidence-archive/periodic-adapter.js"),
       import("../../lib/run-periodic-pipeline.js"),
     ]);
     return {
@@ -117,27 +126,28 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
     };
   }
 
-  function makeRequireLogin(req: IncomingMessage, res: ServerResponse): () => string | null {
-    return () => {
-      const sessId = getSessionIdFromRequest(req);
-      const session = sessId ? getSession(sessId) : undefined;
-      if (!session?.login) {
-        respondJson(res, 401, { error: "Login required" });
-        return null;
-      }
-      return session.login;
-    };
-  }
-
   return async function periodicMiddleware(
     req: IncomingMessage,
     res: ServerResponse,
     next: Next
   ): Promise<void> {
-    const requireLogin = makeRequireLogin(req, res);
+    const requireLogin = createRequireLogin(
+      req,
+      res,
+      getSessionIdFromRequest,
+      getSession
+    );
     const rawPath = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
     const queryString = req.url?.split("?")[1] ?? "";
     const params = new URLSearchParams(queryString);
+
+    function ensureConfigured(isConfigured: () => boolean): boolean {
+      return requireEvidenceArchiveConfigured(
+        res,
+        isConfigured(),
+        "Periodic store"
+      );
+    }
 
     // ── POST /collect-day ──────────────────────────────────────────────────
     if (rawPath === "collect-day" && req.method === "POST") {
@@ -145,20 +155,11 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isPeriodicStoreConfigured()) {
-        respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
-      let body: Record<string, unknown>;
-      try {
-        body = (await readJsonBody(req)) as Record<string, unknown>;
-      } catch {
-        respondJson(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
+      const body = await readJsonBodyOrRespond400(req, res, readJsonBody);
+      if (!body) return;
 
-      // Default to today (UTC)
       const date = (body.date as string | undefined) ??
         new Date().toISOString().slice(0, 10);
 
@@ -186,13 +187,11 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         const evidence = await runIntake({ token, start_date, end_date });
         const summaryJson = await store.runDailySummary(evidence);
         const id = await store.saveDailySummary(userLogin, date, evidence, summaryJson);
-        let parsedSummary: unknown = summaryJson;
-        try { parsedSummary = JSON.parse(summaryJson); } catch { /* return raw */ }
         respondJson(res, 201, {
           id,
           date,
           contribution_count: evidence.contributions.length,
-          summary: parsedSummary,
+          summary: tryParseJson(summaryJson),
         });
       } catch (e) {
         const err = e as Error;
@@ -207,25 +206,16 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isPeriodicStoreConfigured()) {
-        respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
-      let body: Record<string, unknown>;
-      try {
-        body = (await readJsonBody(req)) as Record<string, unknown>;
-      } catch {
-        respondJson(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
+      const body = await readJsonBodyOrRespond400(req, res, readJsonBody);
+      if (!body) return;
 
-      // Default to the current week's Monday
       const rawDate = (body.week_start as string | undefined) ??
         new Date().toISOString().slice(0, 10);
       const ws = weekStart(rawDate);
 
-      if (!DATE_RE.test(ws)) {
+      if (!DATE_YYYY_MM_DD.test(ws)) {
         respondJson(res, 400, { error: "week_start must be YYYY-MM-DD" });
         return;
       }
@@ -244,15 +234,13 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         const childIds = dailies.map((d) => d.id);
         const id = await store.saveWeeklyRollup(userLogin, ws, childIds, rollupJson, totalContributions);
 
-        let parsedSummary: unknown = rollupJson;
-        try { parsedSummary = JSON.parse(rollupJson); } catch { /* return raw */ }
         respondJson(res, 201, {
           id,
           week_start: ws,
           week_end: we,
           days_covered: dailies.length,
           total_contributions: totalContributions,
-          summary: parsedSummary,
+          summary: tryParseJson(rollupJson),
         });
       } catch (e) {
         const err = e as Error;
@@ -267,24 +255,15 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isPeriodicStoreConfigured()) {
-        respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
-      let body: Record<string, unknown>;
-      try {
-        body = (await readJsonBody(req)) as Record<string, unknown>;
-      } catch {
-        respondJson(res, 400, { error: "Invalid JSON body" });
-        return;
-      }
+      const body = await readJsonBodyOrRespond400(req, res, readJsonBody);
+      if (!body) return;
 
-      // Default to current month
       const month = (body.month as string | undefined) ??
         new Date().toISOString().slice(0, 7);
 
-      if (!MONTH_RE.test(month)) {
+      if (!MONTH_YYYY_MM.test(month)) {
         respondJson(res, 400, { error: "month must be YYYY-MM" });
         return;
       }
@@ -302,14 +281,12 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         const childIds = weeklies.map((w) => w.id);
         const id = await store.saveMonthlyRollup(userLogin, month, childIds, rollupJson, totalContributions);
 
-        let parsedSummary: unknown = rollupJson;
-        try { parsedSummary = JSON.parse(rollupJson); } catch { /* return raw */ }
         respondJson(res, 201, {
           id,
           month,
           weeks_covered: weeklies.length,
           total_contributions: totalContributions,
-          summary: parsedSummary,
+          summary: tryParseJson(rollupJson),
         });
       } catch (e) {
         const err = e as Error;
@@ -324,21 +301,17 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       if (!userLogin) return;
 
       const store = await getStore();
-      if (!store.isPeriodicStoreConfigured()) {
-        respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-        return;
-      }
+      if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
       const typeParam = params.get("type");
       const limitParam = params.get("limit");
-      const periodType = typeParam && VALID_PERIOD_TYPES.has(typeParam)
+      const periodType = typeParam && PERIODIC_PERIOD_TYPES.has(typeParam)
         ? (typeParam as PeriodType)
         : undefined;
       const limit = limitParam ? Math.min(Math.max(parseInt(limitParam), 1), MAX_SUMMARIES_LIMIT) : DEFAULT_SUMMARIES_LIMIT;
 
       try {
         const summaries = await store.listPeriodicSummaries(userLogin, periodType, limit);
-        // Parse the JSON summary string for easier frontend consumption
         const parsed = summaries.map((s) => ({
           ...s,
           summary: tryParseJson(s.summary),
@@ -362,10 +335,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         if (!userLogin) return;
 
         const store = await getStore();
-        if (!store.isPeriodicStoreConfigured()) {
-          respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-          return;
-        }
+        if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
         try {
           const summary = await store.getPeriodicSummary(id, userLogin);
@@ -390,10 +360,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         if (!userLogin) return;
 
         const store = await getStore();
-        if (!store.isPeriodicStoreConfigured()) {
-          respondJson(res, 503, { error: "Periodic store not configured (DATABASE_URL missing)" });
-          return;
-        }
+        if (!ensureConfigured(store.isPeriodicStoreConfigured)) return;
 
         try {
           const deleted = await store.deletePeriodicSummary(id, userLogin);
@@ -412,8 +379,4 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
 
     next();
   };
-}
-
-function tryParseJson(s: string): unknown {
-  try { return JSON.parse(s); } catch { return s; }
 }

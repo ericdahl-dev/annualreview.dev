@@ -1,20 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
 import type { AuthUser } from "./useAuth.js";
 
-export type PeriodType = "daily" | "weekly" | "monthly";
+import type { PeriodicSummary, PeriodType } from "../../lib/evidence-archive/types.js";
 
-export interface PeriodicSummary {
-  id: string;
-  user_login: string;
-  period_type: PeriodType;
-  period_key: string;
-  start_date: string;
-  end_date: string;
-  contribution_count: number;
-  summary: unknown; // parsed JSON — shape varies by period_type
-  child_ids: string[] | null;
-  created_at: string;
-}
+export type { PeriodicSummary, PeriodType };
 
 interface DailySummaryResult {
   id: string;
