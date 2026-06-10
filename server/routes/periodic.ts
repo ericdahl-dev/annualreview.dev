@@ -14,7 +14,6 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "http";
-import type { SessionData } from "../../lib/session-store.js";
 import type { Evidence } from "../../types/evidence.js";
 import {
   EvidenceIntakeError,
@@ -36,32 +35,34 @@ import {
   weekEnd,
 } from "../../lib/evidence-archive/period.js";
 import { tryParseJson } from "../../lib/evidence-archive/json.js";
-import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
+import { readJsonBody, respondJson } from "../helpers.js";
+import type { SessionService } from "../route-services.js";
 import {
   createRequireLogin,
   readJsonBodyOrRespond400,
   requireEvidenceArchiveConfigured,
 } from "./evidence-archive-helpers.js";
 
+export interface PeriodicService {
+  intakeFromGitHub: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
+  runDailySummary: (evidence: Evidence) => Promise<string>;
+  runWeeklyRollup: (weekStart: string, weekEnd: string, dailyJsons: string[]) => Promise<string>;
+  runMonthlyRollup: (month: string, weeklyJsons: string[]) => Promise<string>;
+  saveDailySummary: (userLogin: string, date: string, evidence: Evidence, summary: string) => Promise<string>;
+  saveWeeklyRollup: (userLogin: string, weekStartDate: string, childIds: string[], summary: string, totalContributions: number) => Promise<string>;
+  saveMonthlyRollup: (userLogin: string, month: string, childIds: string[], summary: string, totalContributions: number) => Promise<string>;
+  getPeriodicSummary: (id: string, userLogin: string) => Promise<PeriodicSummaryWithEvidence | null>;
+  listPeriodicSummaries: (userLogin: string, periodType?: PeriodType, limit?: number) => Promise<PeriodicSummary[]>;
+  getDailySummariesForWeek: (userLogin: string, weekStartDate: string) => Promise<PeriodicSummaryWithEvidence[]>;
+  getWeeklySummariesForMonth: (userLogin: string, month: string) => Promise<PeriodicSummary[]>;
+  deletePeriodicSummary: (id: string, userLogin: string) => Promise<boolean>;
+  isPeriodicStoreConfigured: () => boolean;
+}
+
 export interface PeriodicRoutesOptions {
-  /** Injected in tests; defaults to streaming JSON from the request. */
-  readJsonBody?: (req: IncomingMessage) => Promise<object>;
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
-  getSession: (id: string) => SessionData | undefined;
-  intakeFromGitHub?: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
-  /** Injected for tests */
-  runDailySummary?: (evidence: Evidence) => Promise<string>;
-  runWeeklyRollup?: (weekStart: string, weekEnd: string, dailyJsons: string[]) => Promise<string>;
-  runMonthlyRollup?: (month: string, weeklyJsons: string[]) => Promise<string>;
-  saveDailySummary?: (userLogin: string, date: string, evidence: Evidence, summary: string) => Promise<string>;
-  saveWeeklyRollup?: (userLogin: string, weekStartDate: string, childIds: string[], summary: string, totalContributions: number) => Promise<string>;
-  saveMonthlyRollup?: (userLogin: string, month: string, childIds: string[], summary: string, totalContributions: number) => Promise<string>;
-  getPeriodicSummary?: (id: string, userLogin: string) => Promise<PeriodicSummaryWithEvidence | null>;
-  listPeriodicSummaries?: (userLogin: string, periodType?: PeriodType, limit?: number) => Promise<PeriodicSummary[]>;
-  getDailySummariesForWeek?: (userLogin: string, weekStartDate: string) => Promise<PeriodicSummaryWithEvidence[]>;
-  getWeeklySummariesForMonth?: (userLogin: string, month: string) => Promise<PeriodicSummary[]>;
-  deletePeriodicSummary?: (id: string, userLogin: string) => Promise<boolean>;
-  isPeriodicStoreConfigured?: () => boolean;
+  session: SessionService;
+  /** Injected in tests; production uses periodic-store and pipeline adapters. */
+  periodic?: PeriodicService;
 }
 
 type Next = () => void;
@@ -70,47 +71,17 @@ const DEFAULT_SUMMARIES_LIMIT = 90;
 const MAX_SUMMARIES_LIMIT = 365;
 
 export function periodicRoutes(options: PeriodicRoutesOptions) {
-  const { getSessionIdFromRequest, getSession } = options;
-  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
-  const runIntake = options.intakeFromGitHub ?? intakeFromGitHub;
+  const { session } = options;
 
-  async function getStore() {
-    const allProvided =
-      options.runDailySummary &&
-      options.runWeeklyRollup &&
-      options.runMonthlyRollup &&
-      options.saveDailySummary &&
-      options.saveWeeklyRollup &&
-      options.saveMonthlyRollup &&
-      options.getPeriodicSummary &&
-      options.listPeriodicSummaries &&
-      options.getDailySummariesForWeek &&
-      options.getWeeklySummariesForMonth &&
-      options.deletePeriodicSummary &&
-      options.isPeriodicStoreConfigured;
-
-    if (allProvided) {
-      return {
-        runDailySummary: options.runDailySummary!,
-        runWeeklyRollup: options.runWeeklyRollup!,
-        runMonthlyRollup: options.runMonthlyRollup!,
-        saveDailySummary: options.saveDailySummary!,
-        saveWeeklyRollup: options.saveWeeklyRollup!,
-        saveMonthlyRollup: options.saveMonthlyRollup!,
-        getPeriodicSummary: options.getPeriodicSummary!,
-        listPeriodicSummaries: options.listPeriodicSummaries!,
-        getDailySummariesForWeek: options.getDailySummariesForWeek!,
-        getWeeklySummariesForMonth: options.getWeeklySummariesForMonth!,
-        deletePeriodicSummary: options.deletePeriodicSummary!,
-        isPeriodicStoreConfigured: options.isPeriodicStoreConfigured!,
-      };
-    }
+  async function getStore(): Promise<PeriodicService> {
+    if (options.periodic) return options.periodic;
 
     const [store, pipeline] = await Promise.all([
       import("../../lib/evidence-archive/periodic-adapter.js"),
       import("../../lib/run-periodic-pipeline.js"),
     ]);
     return {
+      intakeFromGitHub,
       runDailySummary: pipeline.runDailySummary,
       runWeeklyRollup: pipeline.runWeeklyRollup,
       runMonthlyRollup: pipeline.runMonthlyRollup,
@@ -131,12 +102,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
     res: ServerResponse,
     next: Next
   ): Promise<void> {
-    const requireLogin = createRequireLogin(
-      req,
-      res,
-      getSessionIdFromRequest,
-      getSession
-    );
+    const requireLogin = createRequireLogin(req, res, session);
     const rawPath = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
     const queryString = req.url?.split("?")[1] ?? "";
     const params = new URLSearchParams(queryString);
@@ -163,8 +129,8 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       const date = (body.date as string | undefined) ??
         new Date().toISOString().slice(0, 10);
 
-      const sessId = getSessionIdFromRequest(req);
-      const session = sessId ? getSession(sessId) : undefined;
+      const sessId = session.getSessionIdFromRequest(req);
+      const userSession = sessId ? session.getSession(sessId) : undefined;
       let start_date: string;
       let end_date: string;
       let token: string;
@@ -172,7 +138,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
         ({ start_date, end_date } = parseTimeframe(date, date));
         token = resolveGitHubToken({
           body: body.token,
-          session: session?.access_token,
+          session: userSession?.access_token,
         });
       } catch (e) {
         if (e instanceof EvidenceIntakeError) {
@@ -184,7 +150,7 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       }
 
       try {
-        const evidence = await runIntake({ token, start_date, end_date });
+        const evidence = await store.intakeFromGitHub({ token, start_date, end_date });
         const summaryJson = await store.runDailySummary(evidence);
         const id = await store.saveDailySummary(userLogin, date, evidence, summaryJson);
         respondJson(res, 201, {

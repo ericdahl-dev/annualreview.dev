@@ -5,7 +5,6 @@
 
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Evidence } from "../../types/evidence.js";
-import type { SessionData } from "../../lib/session-store.js";
 import {
   EvidenceIntakeError,
   intakeFromGitHub,
@@ -14,28 +13,24 @@ import {
   type IntakeFromGitHubOptions,
 } from "../../lib/evidence-intake.js";
 import { readJsonBody, respondJson } from "../helpers.js";
+import type { JobRunnerService, SessionService } from "../route-services.js";
+
+export interface CollectService {
+  intakeFromGitHub?: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
+}
 
 export interface CollectRoutesOptions {
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
-  getSession: (id: string) => SessionData | undefined;
-  createJob: (type: string, sessionId?: string) => string;
-  runInBackground: (
-    jobId: string,
-    fn: () => void | Promise<unknown>
-  ) => void;
-  intakeFromGitHub?: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
+  session: SessionService;
+  jobs: JobRunnerService;
+  collect?: CollectService;
 }
 
 type Next = () => void;
 
 export function collectRoutes(options: CollectRoutesOptions) {
-  const {
-    getSessionIdFromRequest,
-    getSession,
-    createJob,
-    runInBackground,
-  } = options;
-  const runIntake = options.intakeFromGitHub ?? intakeFromGitHub;
+  const { session, jobs, collect = {} } = options;
+  const { createJob, runInBackground } = jobs;
+  const runIntake = collect.intakeFromGitHub ?? intakeFromGitHub;
 
   return async function collectMiddleware(
     req: IncomingMessage,
@@ -52,8 +47,8 @@ export function collectRoutes(options: CollectRoutesOptions) {
         end_date?: string;
         token?: string;
       };
-      const sessionId = getSessionIdFromRequest(req);
-      const session = sessionId ? getSession(sessionId) : undefined;
+      const sessionId = session.getSessionIdFromRequest(req);
+      const userSession = sessionId ? session.getSession(sessionId) : undefined;
       let start_date: string;
       let end_date: string;
       let token: string;
@@ -61,7 +56,7 @@ export function collectRoutes(options: CollectRoutesOptions) {
         ({ start_date, end_date } = parseTimeframe(body.start_date, body.end_date));
         token = resolveGitHubToken({
           body: body.token,
-          session: session?.access_token,
+          session: userSession?.access_token,
         });
       } catch (e) {
         if (e instanceof EvidenceIntakeError) {

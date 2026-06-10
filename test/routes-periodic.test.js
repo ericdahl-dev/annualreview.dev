@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { periodicRoutes } from "../server/routes/periodic.ts";
-import { mockRes, mockReq, respondJson } from "./helpers.js";
+import { mockRes, mockReq } from "./helpers.js";
 
 const SAMPLE_EVIDENCE = {
   timeframe: { start_date: "2025-01-15", end_date: "2025-01-15" },
@@ -18,13 +18,15 @@ const SAMPLE_DAILY_JSON = JSON.stringify({
 });
 
 const SESSION = { login: "alice", access_token: "gh_tok", created_at: "2025-01-01T00:00:00Z" };
+const LOGGED_IN = {
+  session: {
+    getSessionIdFromRequest: () => "sess1",
+    getSession: () => SESSION,
+  },
+};
 
-function makeOptions(overrides = {}) {
+function defaultPeriodic() {
   return {
-    readJsonBody: vi.fn().mockResolvedValue({}),
-    respondJson,
-    getSessionIdFromRequest: () => null,
-    getSession: () => undefined,
     intakeFromGitHub: vi.fn().mockResolvedValue(SAMPLE_EVIDENCE),
     runDailySummary: vi.fn().mockResolvedValue(SAMPLE_DAILY_JSON),
     runWeeklyRollup: vi.fn().mockResolvedValue(JSON.stringify({
@@ -55,8 +57,21 @@ function makeOptions(overrides = {}) {
     getWeeklySummariesForMonth: vi.fn().mockResolvedValue([]),
     deletePeriodicSummary: vi.fn().mockResolvedValue(false),
     isPeriodicStoreConfigured: () => true,
-    ...overrides,
   };
+}
+
+function makeOptions(overrides = {}) {
+  const periodic = { ...defaultPeriodic(), ...(overrides.periodic || {}) };
+  const options = {
+    session: {
+      getSessionIdFromRequest: () => null,
+      getSession: () => undefined,
+      ...(overrides.session || {}),
+    },
+    periodic,
+  };
+  Object.assign(options, periodic);
+  return options;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -100,9 +115,8 @@ describe("periodicRoutes – auth", () => {
 describe("periodicRoutes – not configured", () => {
   it("returns 503 when store not configured", async () => {
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      isPeriodicStoreConfigured: () => false,
+      ...LOGGED_IN,
+      periodic: { isPeriodicStoreConfigured: () => false },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("GET", "/summaries");
@@ -118,12 +132,13 @@ describe("periodicRoutes – not configured", () => {
 describe("periodicRoutes – POST /collect-day", () => {
   it("returns 401 when no GitHub token is available", async () => {
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => ({ login: "alice", created_at: "2025-01-01T00:00:00Z" }), // no access_token
-      readJsonBody: vi.fn().mockResolvedValue({}),
+      session: {
+        getSessionIdFromRequest: () => "sess1",
+        getSession: () => ({ login: "alice", created_at: "2025-01-01T00:00:00Z" }),
+      },
     });
     const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/collect-day");
+    const req = mockReq("POST", "/collect-day", {});
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(401);
@@ -131,13 +146,8 @@ describe("periodicRoutes – POST /collect-day", () => {
   });
 
   it("returns 400 for invalid date format", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ date: "15/01/2025" }),
-    });
-    const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/collect-day");
+    const handler = periodicRoutes(makeOptions(LOGGED_IN));
+    const req = mockReq("POST", "/collect-day", { date: "15/01/2025" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(400);
@@ -150,15 +160,15 @@ describe("periodicRoutes – POST /collect-day", () => {
     const mockSave = vi.fn().mockResolvedValue("pday_new");
 
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ date: "2025-01-15" }),
-      intakeFromGitHub: mockCollect,
-      runDailySummary: mockSummary,
-      saveDailySummary: mockSave,
+      ...LOGGED_IN,
+      periodic: {
+        intakeFromGitHub: mockCollect,
+        runDailySummary: mockSummary,
+        saveDailySummary: mockSave,
+      },
     });
     const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/collect-day");
+    const req = mockReq("POST", "/collect-day", { date: "2025-01-15" });
     const res = mockRes();
     await handler(req, res, () => {});
 
@@ -177,13 +187,11 @@ describe("periodicRoutes – POST /collect-day", () => {
   it("uses session token when no token in body", async () => {
     const mockCollect = vi.fn().mockResolvedValue(SAMPLE_EVIDENCE);
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION, // has access_token: "gh_tok"
-      readJsonBody: vi.fn().mockResolvedValue({ date: "2025-01-15" }),
-      intakeFromGitHub: mockCollect,
+      ...LOGGED_IN,
+      periodic: { intakeFromGitHub: mockCollect },
     });
     const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/collect-day");
+    const req = mockReq("POST", "/collect-day", { date: "2025-01-15" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(mockCollect).toHaveBeenCalledWith(
@@ -196,14 +204,11 @@ describe("periodicRoutes – POST /collect-day", () => {
 
 describe("periodicRoutes – POST /rollup-week", () => {
   it("returns 404 when no daily summaries found for the week", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ week_start: "2025-01-13" }),
-      getDailySummariesForWeek: vi.fn().mockResolvedValue([]),
-    });
-    const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/rollup-week");
+    const handler = periodicRoutes(makeOptions({
+      ...LOGGED_IN,
+      periodic: { getDailySummariesForWeek: vi.fn().mockResolvedValue([]) },
+    }));
+    const req = mockReq("POST", "/rollup-week", { week_start: "2025-01-13" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(404);
@@ -234,15 +239,15 @@ describe("periodicRoutes – POST /rollup-week", () => {
     }));
     const mockSave = vi.fn().mockResolvedValue("pwk_new");
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ week_start: "2025-01-13" }),
-      getDailySummariesForWeek: vi.fn().mockResolvedValue([daily]),
-      runWeeklyRollup: mockRollup,
-      saveWeeklyRollup: mockSave,
+      ...LOGGED_IN,
+      periodic: {
+        getDailySummariesForWeek: vi.fn().mockResolvedValue([daily]),
+        runWeeklyRollup: mockRollup,
+        saveWeeklyRollup: mockSave,
+      },
     });
     const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/rollup-week");
+    const req = mockReq("POST", "/rollup-week", { week_start: "2025-01-13" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(201);
@@ -257,13 +262,8 @@ describe("periodicRoutes – POST /rollup-week", () => {
 
 describe("periodicRoutes – POST /rollup-month", () => {
   it("returns 400 for invalid month format", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ month: "January 2025" }),
-    });
-    const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/rollup-month");
+    const handler = periodicRoutes(makeOptions(LOGGED_IN));
+    const req = mockReq("POST", "/rollup-month", { month: "January 2025" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(400);
@@ -271,14 +271,11 @@ describe("periodicRoutes – POST /rollup-month", () => {
   });
 
   it("returns 404 when no weekly summaries for month", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ month: "2025-01" }),
-      getWeeklySummariesForMonth: vi.fn().mockResolvedValue([]),
-    });
-    const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/rollup-month");
+    const handler = periodicRoutes(makeOptions({
+      ...LOGGED_IN,
+      periodic: { getWeeklySummariesForMonth: vi.fn().mockResolvedValue([]) },
+    }));
+    const req = mockReq("POST", "/rollup-month", { month: "2025-01" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(404);
@@ -300,14 +297,14 @@ describe("periodicRoutes – POST /rollup-month", () => {
     };
     const mockSave = vi.fn().mockResolvedValue("pmo_new");
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      readJsonBody: vi.fn().mockResolvedValue({ month: "2025-01" }),
-      getWeeklySummariesForMonth: vi.fn().mockResolvedValue([weekly]),
-      saveMonthlyRollup: mockSave,
+      ...LOGGED_IN,
+      periodic: {
+        getWeeklySummariesForMonth: vi.fn().mockResolvedValue([weekly]),
+        saveMonthlyRollup: mockSave,
+      },
     });
     const handler = periodicRoutes(opts);
-    const req = mockReq("POST", "/rollup-month");
+    const req = mockReq("POST", "/rollup-month", { month: "2025-01" });
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(201);
@@ -322,11 +319,7 @@ describe("periodicRoutes – POST /rollup-month", () => {
 
 describe("periodicRoutes – GET /summaries", () => {
   it("returns empty list when no summaries", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-    });
-    const handler = periodicRoutes(opts);
+    const handler = periodicRoutes(makeOptions(LOGGED_IN));
     const req = mockReq("GET", "/summaries");
     const res = mockRes();
     await handler(req, res, () => {});
@@ -337,9 +330,8 @@ describe("periodicRoutes – GET /summaries", () => {
   it("passes type filter to store", async () => {
     const mockList = vi.fn().mockResolvedValue([]);
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      listPeriodicSummaries: mockList,
+      ...LOGGED_IN,
+      periodic: { listPeriodicSummaries: mockList },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("GET", "/summaries?type=daily");
@@ -363,9 +355,8 @@ describe("periodicRoutes – GET /summaries", () => {
       created_at: "2025-01-15T23:00:00Z",
     }]);
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      listPeriodicSummaries: mockList,
+      ...LOGGED_IN,
+      periodic: { listPeriodicSummaries: mockList },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("GET", "/summaries");
@@ -383,9 +374,8 @@ describe("periodicRoutes – GET /summaries", () => {
 describe("periodicRoutes – GET /summary/:id", () => {
   it("returns 404 when not found", async () => {
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      getPeriodicSummary: vi.fn().mockResolvedValue(null),
+      ...LOGGED_IN,
+      periodic: { getPeriodicSummary: vi.fn().mockResolvedValue(null) },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("GET", "/summary/missing");
@@ -409,9 +399,8 @@ describe("periodicRoutes – GET /summary/:id", () => {
       created_at: "2025-01-15T23:00:00Z",
     };
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      getPeriodicSummary: vi.fn().mockResolvedValue(snap),
+      ...LOGGED_IN,
+      periodic: { getPeriodicSummary: vi.fn().mockResolvedValue(snap) },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("GET", "/summary/pday_1");
@@ -428,9 +417,8 @@ describe("periodicRoutes – GET /summary/:id", () => {
 describe("periodicRoutes – DELETE /summary/:id", () => {
   it("returns 404 when not found", async () => {
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      deletePeriodicSummary: vi.fn().mockResolvedValue(false),
+      ...LOGGED_IN,
+      periodic: { deletePeriodicSummary: vi.fn().mockResolvedValue(false) },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("DELETE", "/summary/missing");
@@ -441,9 +429,8 @@ describe("periodicRoutes – DELETE /summary/:id", () => {
 
   it("returns 200 when deleted", async () => {
     const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-      deletePeriodicSummary: vi.fn().mockResolvedValue(true),
+      ...LOGGED_IN,
+      periodic: { deletePeriodicSummary: vi.fn().mockResolvedValue(true) },
     });
     const handler = periodicRoutes(opts);
     const req = mockReq("DELETE", "/summary/pday_1");
@@ -458,11 +445,7 @@ describe("periodicRoutes – DELETE /summary/:id", () => {
 
 describe("periodicRoutes – next()", () => {
   it("calls next for unmatched routes", async () => {
-    const opts = makeOptions({
-      getSessionIdFromRequest: () => "sess1",
-      getSession: () => SESSION,
-    });
-    const handler = periodicRoutes(opts);
+    const handler = periodicRoutes(makeOptions(LOGGED_IN));
     const req = mockReq("PUT", "/unknown");
     const res = mockRes();
     let nextCalled = false;

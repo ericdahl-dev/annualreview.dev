@@ -123,6 +123,8 @@ function handleRequest(
   const log = (event: string, detail?: string): void =>
     console.error("[auth] " + event + (detail ? " " + detail : ""));
   const getSessionId = (r: IncomingMessage) => getSessionIdFromRequest(r, sessionSecret);
+  const session = { getSessionIdFromRequest: getSessionId, getSession };
+  const jobs = { createJob, runInBackground };
 
   if (path.startsWith("api/")) {
     const apiPath = path.slice(4);
@@ -175,56 +177,40 @@ function handleRequest(
 
     if (routeArea === "jobs") {
       jobsRoutes({
-        getSessionIdFromRequest: getSessionId,
-        getLatestJob,
-        getJob,
+        session,
+        jobs: { getLatestJob, getJob },
       })(wrappedReq, res, next);
       return;
     }
 
     if (routeArea === "generate") {
       generateRoutes({
-        validateEvidence,
-        createJob,
-        runInBackground,
-        runPipeline,
-        getSessionIdFromRequest: getSessionId,
-        getSession,
+        session,
+        jobs,
+        pipeline: { validateEvidence, runPipeline },
       })(wrappedReq, res, next);
       return;
     }
 
     if (routeArea === "payments") {
-      paymentsRoutes({
-        getSessionIdFromRequest: getSessionId,
-        getSession,
-      })(wrappedReq, res, next);
+      paymentsRoutes({ session })(wrappedReq, res, next);
       return;
     }
 
     if (routeArea === "collect") {
       collectRoutes({
-        getSessionIdFromRequest: getSessionId,
-        getSession,
-        createJob,
-        runInBackground,
-        intakeFromGitHub,
+        session,
+        jobs,
+        collect: { intakeFromGitHub },
       })(wrappedReq, res, next);
       return;
     }
     if (routeArea === "snapshots") {
-      snapshotsRoutes({
-        getSessionIdFromRequest: getSessionId,
-        getSession,
-      })(wrappedReq, res, next);
+      snapshotsRoutes({ session })(wrappedReq, res, next);
       return;
     }
     if (routeArea === "periodic") {
-      periodicRoutes({
-        getSessionIdFromRequest: getSessionId,
-        getSession,
-        intakeFromGitHub,
-      })(wrappedReq, res, next);
+      periodicRoutes({ session })(wrappedReq, res, next);
       return;
     }
   }

@@ -6,17 +6,23 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Job } from "../../lib/job-store.js";
 import { respondJson } from "../helpers.js";
+import type { SessionService } from "../route-services.js";
 
-export interface JobsRoutesOptions {
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
+export interface JobsService {
   getLatestJob: (sessionId: string) => (Job & { id: string }) | null;
   getJob: (id: string) => Job | undefined;
+}
+
+export interface JobsRoutesOptions {
+  session: SessionService;
+  jobs: JobsService;
 }
 
 type Next = () => void;
 
 export function jobsRoutes(options: JobsRoutesOptions) {
-  const { getSessionIdFromRequest, getLatestJob, getJob } = options;
+  const { session, jobs } = options;
+  const { getLatestJob, getJob } = jobs;
 
   return function jobsMiddleware(
     req: IncomingMessage,
@@ -29,7 +35,7 @@ export function jobsRoutes(options: JobsRoutesOptions) {
     }
     const path = (req.url?.split("?")[0] || "").replace(/^\/+/, "") || "";
     if (!path) {
-      const sessionId = getSessionIdFromRequest(req);
+      const sessionId = session.getSessionIdFromRequest(req);
       const latest = sessionId ? getLatestJob(sessionId) : null;
       respondJson(res, 200, latest ? { latest } : { latest: null });
       return;

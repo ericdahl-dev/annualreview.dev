@@ -84,6 +84,8 @@ function apiRoutesPlugin() {
         env.GITHUB_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
       const getSessionId = (r: { headers?: { cookie?: string } }) =>
         getSessionIdFromRequest(r, sessionSecret);
+      const session = { getSessionIdFromRequest: getSessionId, getSession };
+      const jobs = { createJob, runInBackground };
 
       function getRequestContext(req: { headers: Record<string, string | string[] | undefined> }) {
         const isSecure = req.headers["x-forwarded-proto"] === "https";
@@ -133,57 +135,41 @@ function apiRoutesPlugin() {
       server.middlewares.use(
         "/api/jobs",
         jobsRoutes({
-          getSessionIdFromRequest: getSessionId,
-          getLatestJob,
-          getJob,
+          session,
+          jobs: { getLatestJob, getJob },
         })
       );
 
       server.middlewares.use(
         "/api/generate",
         generateRoutes({
-          validateEvidence,
-          createJob,
-          runInBackground,
-          runPipeline,
-          getSessionIdFromRequest: getSessionId,
-          getSession,
+          session,
+          jobs,
+          pipeline: { validateEvidence, runPipeline },
         })
       );
 
       server.middlewares.use(
         "/api/collect",
         collectRoutes({
-          getSessionIdFromRequest: getSessionId,
-          getSession,
-          createJob,
-          runInBackground,
-          intakeFromGitHub,
+          session,
+          jobs,
+          collect: { intakeFromGitHub },
         })
       );
 
       server.middlewares.use(
         "/api/payments",
-        paymentsRoutes({
-          getSessionIdFromRequest: getSessionId,
-          getSession,
-        })
+        paymentsRoutes({ session })
       );
       server.middlewares.use(
         "/api/snapshots",
-        snapshotsRoutes({
-          getSessionIdFromRequest: getSessionId,
-          getSession,
-        })
+        snapshotsRoutes({ session })
       );
 
       server.middlewares.use(
         "/api/periodic",
-        periodicRoutes({
-          getSessionIdFromRequest: getSessionId,
-          getSession,
-          intakeFromGitHub,
-        })
+        periodicRoutes({ session })
       );
     },
   };

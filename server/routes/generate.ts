@@ -15,36 +15,44 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { ValidationResult } from "../../lib/validate-evidence.js";
 import type { Evidence } from "../../types/evidence.js";
 import type { PipelineResult } from "../../lib/run-pipeline.js";
-import type { SessionData } from "../../lib/session-store.js";
-import { awardCredits as defaultAwardCredits, deductCredit as defaultDeductCredit, getCredits as defaultGetCredits, isCreditStoreConfigured as defaultIsPaymentsConfigured } from "../../lib/payment-store.js";
+import {
+  awardCredits as defaultAwardCredits,
+  deductCredit as defaultDeductCredit,
+  getCredits as defaultGetCredits,
+  isCreditStoreConfigured as defaultIsPaymentsConfigured,
+} from "../../lib/payment-store.js";
 import { PAYMENTS_NOT_CONFIGURED } from "../../lib/api-error-codes.js";
 import Stripe from "stripe";
 import { STRIPE_API_VERSION } from "../config.js";
-import { readJsonBody as defaultReadJsonBody, respondJson } from "../helpers.js";
+import { readJsonBody, respondJson } from "../helpers.js";
+import type { JobRunnerService, SessionService } from "../route-services.js";
 
-export interface GenerateRoutesOptions {
-  /** Injected in tests; defaults to streaming JSON from the request. */
-  readJsonBody?: (req: IncomingMessage) => Promise<object>;
+export interface GeneratePipelineService {
   validateEvidence: (evidence: unknown) => ValidationResult;
-  createJob: (type: string, sessionId?: string) => string;
-  runInBackground: (
-    jobId: string,
-    fn: (report: (data: { progress?: string }) => void) => void | Promise<unknown>
-  ) => void;
   runPipeline: (
     evidence: Evidence,
-    opts: { onProgress: (data: { stepIndex: number; total: number; label: string }) => void; premium?: boolean; posthogDistinctId?: string; posthogTraceId?: string }
+    opts: {
+      onProgress: (data: { stepIndex: number; total: number; label: string }) => void;
+      premium?: boolean;
+      posthogDistinctId?: string;
+      posthogTraceId?: string;
+    }
   ) => Promise<PipelineResult>;
-  getSessionIdFromRequest: (req: IncomingMessage) => string | null;
-  getSession: (id: string) => SessionData | undefined;
-  /** Optional injected Stripe client (for tests). */
+}
+
+export interface GeneratePaymentService {
   getStripe?: () => Stripe | null;
-  /** Check if payments/DB are configured (injectable for tests). */
   isPaymentsConfigured?: () => boolean;
-  /** Optional injected payment functions (for tests). */
   deductCredit?: (login: string) => Promise<boolean>;
   awardCredits?: (login: string, sessionId: string) => Promise<void>;
   getCredits?: (login: string) => Promise<number>;
+}
+
+export interface GenerateRoutesOptions {
+  session: SessionService;
+  jobs: JobRunnerService;
+  pipeline: GeneratePipelineService;
+  payments?: GeneratePaymentService;
 }
 
 type Next = () => void;
@@ -82,20 +90,14 @@ async function verifyAndAwardFromStripe(
 }
 
 export function generateRoutes(options: GenerateRoutesOptions) {
-  const {
-    validateEvidence,
-    createJob,
-    runInBackground,
-    runPipeline,
-    getSessionIdFromRequest,
-    getSession,
-    getStripe = defaultGetStripe,
-    isPaymentsConfigured = defaultIsPaymentsConfigured,
-    deductCredit = defaultDeductCredit,
-    awardCredits = defaultAwardCredits,
-    getCredits = defaultGetCredits,
-  } = options;
-  const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
+  const { session, jobs, pipeline, payments = {} } = options;
+  const { validateEvidence, runPipeline } = pipeline;
+  const { createJob, runInBackground } = jobs;
+  const getStripe = payments.getStripe ?? defaultGetStripe;
+  const isPaymentsConfigured = payments.isPaymentsConfigured ?? defaultIsPaymentsConfigured;
+  const deductCredit = payments.deductCredit ?? defaultDeductCredit;
+  const awardCredits = payments.awardCredits ?? defaultAwardCredits;
+  const getCredits = payments.getCredits ?? defaultGetCredits;
 
   return async function generateMiddleware(
     req: IncomingMessage,
@@ -138,7 +140,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
       let premium = false;
       let creditsRemaining: number | undefined;
 
-      const sessId = getSessionIdFromRequest(req);
+      const sessId = session.getSessionIdFromRequest(req);
 
       if (wantsPremium) {
         if (!isPaymentsConfigured()) {
@@ -146,7 +148,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
           return;
         }
         // Must be logged in — credits are tied to a GitHub account
-        const userSession = sessId ? getSession(sessId) : undefined;
+        const userSession = sessId ? session.getSession(sessId) : undefined;
         if (!userSession?.login) {
           respondJson(res, 401, { error: "Login required for premium generation" });
           return;
@@ -181,7 +183,7 @@ export function generateRoutes(options: GenerateRoutesOptions) {
           posthogDistinctId,
           posthogTraceId,
           onProgress: ({ stepIndex, total, label }) =>
-            report({ progress: `${stepIndex}/${total} ${label}` }),
+            report?.({ progress: `${stepIndex}/${total} ${label}` }),
         })
       );
       respondJson(res, 202, {

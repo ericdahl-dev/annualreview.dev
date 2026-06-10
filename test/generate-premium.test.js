@@ -1,30 +1,95 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { generateRoutes } from "../server/routes/generate.ts";
 import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.ts";
-import { mockRes, respondJson } from "./helpers.js";
+import * as helpers from "../server/helpers.ts";
+import { mockRes, mockReq } from "./helpers.js";
 
 const validEvidence = {
   timeframe: { start_date: "2025-01-01", end_date: "2025-12-31" },
   contributions: [],
 };
 
+function postReq(body = validEvidence) {
+  return mockReq("POST", "/", body);
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 /** Build default options (not logged in). */
 function makeOptions(overrides = {}) {
   const runPipeline = vi.fn().mockResolvedValue({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
   const createJob = vi.fn().mockReturnValue("job-1");
   const runInBackground = vi.fn((jobId, fn) => fn(() => {}));
-  return {
-    readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence }),
-    respondJson,
-    validateEvidence: (ev) => ({ valid: !!ev?.timeframe?.start_date }),
-    createJob,
-    runInBackground,
-    runPipeline,
-    getStripe: () => null,
-    getSessionIdFromRequest: vi.fn().mockReturnValue(null),
-    getSession: vi.fn().mockReturnValue(undefined),
-    ...overrides,
+
+  const {
+    readJsonBody: _readJsonBody,
+    validateEvidence,
+    createJob: createJobOverride,
+    runInBackground: runInBackgroundOverride,
+    runPipeline: runPipelineOverride,
+    getSessionIdFromRequest,
+    getSession,
+    getStripe,
+    isPaymentsConfigured,
+    deductCredit,
+    awardCredits,
+    getCredits,
+    session: sessionOverrides,
+    jobs: jobsOverrides,
+    pipeline: pipelineOverrides,
+    payments: paymentsOverrides,
+    ...rest
+  } = overrides;
+
+  const options = {
+    session: {
+      getSessionIdFromRequest: vi.fn().mockReturnValue(null),
+      getSession: vi.fn().mockReturnValue(undefined),
+      ...(getSessionIdFromRequest !== undefined ? { getSessionIdFromRequest } : {}),
+      ...(getSession !== undefined ? { getSession } : {}),
+      ...(sessionOverrides || {}),
+    },
+    jobs: {
+      createJob,
+      runInBackground,
+      ...(createJobOverride ? { createJob: createJobOverride } : {}),
+      ...(runInBackgroundOverride ? { runInBackground: runInBackgroundOverride } : {}),
+      ...(jobsOverrides || {}),
+    },
+    pipeline: {
+      validateEvidence: (ev) => ({ valid: !!ev?.timeframe?.start_date }),
+      runPipeline,
+      ...(validateEvidence ? { validateEvidence } : {}),
+      ...(runPipelineOverride ? { runPipeline: runPipelineOverride } : {}),
+      ...(pipelineOverrides || {}),
+    },
+    ...rest,
   };
+
+  const paymentFields = {
+    ...(getStripe !== undefined ? { getStripe } : {}),
+    ...(isPaymentsConfigured ? { isPaymentsConfigured } : {}),
+    ...(deductCredit ? { deductCredit } : {}),
+    ...(awardCredits ? { awardCredits } : {}),
+    ...(getCredits ? { getCredits } : {}),
+    ...(paymentsOverrides || {}),
+  };
+  if (Object.keys(paymentFields).length > 0) {
+    options.payments = paymentFields;
+  }
+
+  options.createJob = options.jobs.createJob;
+  options.runInBackground = options.jobs.runInBackground;
+  options.runPipeline = options.pipeline.runPipeline;
+  if (options.payments) Object.assign(options, options.payments);
+
+  if (_readJsonBody) {
+    vi.spyOn(helpers, "readJsonBody").mockImplementation(_readJsonBody);
+  }
+
+  return options;
 }
 
 /** Build options with a logged-in user. */
@@ -32,8 +97,6 @@ function makeOptionsLoggedIn(login, overrides = {}) {
   return makeOptions({
     getSessionIdFromRequest: vi.fn().mockReturnValue("sess_test"),
     getSession: vi.fn().mockReturnValue({ login, access_token: "tok", created_at: "2025-01-01" }),
-    // Payment functions default to "configured but no credits" so tests that don't
-    // explicitly care about the payment layer still work without DATABASE_URL.
     isPaymentsConfigured: () => true,
     deductCredit: vi.fn().mockResolvedValue(false),
     getCredits: vi.fn().mockResolvedValue(0),
@@ -45,12 +108,11 @@ function makeOptionsLoggedIn(login, overrides = {}) {
 describe("generateRoutes – payments not configured", () => {
   it("returns 503 with PAYMENTS_NOT_CONFIGURED when wantsPremium but DB is absent", async () => {
     const opts = makeOptionsLoggedIn("alice", {
-      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
       isPaymentsConfigured: () => false,
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq({ ...validEvidence, _premium: true }), res, () => {});
     expect(res.statusCode).toBe(503);
     expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -58,12 +120,11 @@ describe("generateRoutes – payments not configured", () => {
 
   it("returns 503 with PAYMENTS_NOT_CONFIGURED when _stripe_session_id sent but DB is absent", async () => {
     const opts = makeOptionsLoggedIn("alice", {
-      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _stripe_session_id: "cs_test" }),
       isPaymentsConfigured: () => false,
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq({ ...validEvidence, _stripe_session_id: "cs_test" }), res, () => {});
     expect(res.statusCode).toBe(503);
     expect(res.body).toMatchObject({ error: "Premium is not available", code: PAYMENTS_NOT_CONFIGURED });
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -74,7 +135,7 @@ describe("generateRoutes – payments not configured", () => {
       getSessionIdFromRequest: vi.fn().mockReturnValue("sess_anon"),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate", "sess_anon");
@@ -88,7 +149,7 @@ describe("generateRoutes – error and progress paths", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe("network failure");
   });
@@ -99,7 +160,7 @@ describe("generateRoutes – error and progress paths", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe("Pipeline failed");
   });
@@ -128,7 +189,7 @@ describe("generateRoutes – error and progress paths", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(capturedReport).toHaveBeenCalledWith({ progress: "1/3 themes" });
   });
 });
@@ -136,13 +197,12 @@ describe("generateRoutes – error and progress paths", () => {
 describe("generateRoutes – premium paths (mocked payment functions)", () => {
   it("returns 401 when wantsPremium, payments configured, but user not logged in", async () => {
     const opts = makeOptions({
-      readJsonBody: vi.fn().mockResolvedValue({ ...validEvidence, _premium: true }),
       isPaymentsConfigured: () => true,
       getSessionIdFromRequest: vi.fn().mockReturnValue(null),
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq({ ...validEvidence, _premium: true }), res, () => {});
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toMatch(/login required/i);
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -157,7 +217,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(402);
     expect(res.body.error).toMatch(/no premium credits/i);
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -185,7 +245,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(402);
     expect(res.body.error).toMatch(/payment required/i);
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -202,7 +262,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(402);
     expect(res.body.error).toMatch(/payment required/i);
     expect(opts.runPipeline).not.toHaveBeenCalled();
@@ -217,7 +277,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({ job_id: "job-1", premium: true, credits_remaining: 4 });
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
@@ -253,7 +313,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(202);
     expect(res.body).toMatchObject({ premium: true });
     expect(mockAwardCredits).toHaveBeenCalledWith("carol", "cs_new");
@@ -278,7 +338,7 @@ describe("generateRoutes – premium paths (mocked payment functions)", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(402);
     expect(res.body.error).toMatch(/payment required/i);
   });
@@ -288,7 +348,7 @@ describe("generateRoutes – premium flag", () => {
   it("runs free pipeline when no stripe_session_id and no _premium flag", async () => {
     const opts = makeOptions();
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate", undefined);
@@ -307,7 +367,7 @@ describe("generateRoutes – premium flag", () => {
       getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
@@ -319,7 +379,7 @@ describe("generateRoutes – premium flag", () => {
       isPaymentsConfigured: () => true,
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(401);
@@ -346,7 +406,7 @@ describe("generateRoutes – premium flag", () => {
       }),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(402);
@@ -364,7 +424,7 @@ describe("generateRoutes – premium flag", () => {
       getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
@@ -383,7 +443,7 @@ describe("generateRoutes – premium flag", () => {
       getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(opts.createJob).toHaveBeenCalledWith("generate-premium", "sess_test");
@@ -411,7 +471,7 @@ describe("generateRoutes – premium flag", () => {
       getCredits: vi.fn().mockResolvedValue(0),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(mockAwardCredits).toHaveBeenCalledWith("carol", "cs_new");
@@ -439,7 +499,7 @@ describe("generateRoutes – premium flag", () => {
       awardCredits: vi.fn().mockResolvedValue(undefined),
     });
     const handler = generateRoutes(opts);
-    const req = { method: "POST", url: "/" };
+    const req = postReq();
     const res = mockRes();
     await handler(req, res, () => {});
     expect(res.statusCode).toBe(402);
@@ -454,10 +514,10 @@ describe("generateRoutes – premium flag", () => {
     });
     const handler = generateRoutes(opts);
     const res1 = mockRes();
-    await handler({ method: "POST", url: "/" }, res1, () => {});
+    await handler(postReq(), res1, () => {});
     expect(res1.statusCode).toBe(202);
     const res2 = mockRes();
-    await handler({ method: "POST", url: "/" }, res2, () => {});
+    await handler(postReq(), res2, () => {});
     expect(res2.statusCode).toBe(402);
     expect(res2.body.error).toMatch(/no premium credits/i);
   });
@@ -476,7 +536,7 @@ describe("generateRoutes – premium flag", () => {
         return Promise.resolve({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
       }),
     });
-    await generateRoutes(opts)({ method: "POST", url: "/" }, mockRes(), () => {});
+    await generateRoutes(opts)(postReq(), mockRes(), () => {});
     expect(capturedEvidence).toBeDefined();
     expect(capturedEvidence).not.toHaveProperty("_stripe_session_id");
     expect(capturedEvidence).not.toHaveProperty("_premium");
@@ -492,7 +552,7 @@ describe("generateRoutes – premium flag", () => {
     });
     const handler = generateRoutes(opts);
     const res = mockRes();
-    await handler({ method: "POST", url: "/" }, res, () => {});
+    await handler(postReq(), res, () => {});
     expect(res.statusCode).toBe(202);
     expect(opts.runPipeline).toHaveBeenCalledWith(
       expect.anything(),
@@ -516,7 +576,7 @@ describe("generateRoutes – premium flag", () => {
         return Promise.resolve({ themes: {}, bullets: {}, stories: {}, self_eval: {} });
       }),
     });
-    await generateRoutes(opts)({ method: "POST", url: "/" }, mockRes(), () => {});
+    await generateRoutes(opts)(postReq(), mockRes(), () => {});
     expect(capturedEvidence).toBeDefined();
     expect(capturedEvidence).not.toHaveProperty("posthog_distinct_id");
     expect(capturedEvidence).not.toHaveProperty("posthog_trace_id");
@@ -525,7 +585,7 @@ describe("generateRoutes – premium flag", () => {
   it("omits posthogDistinctId and posthogTraceId from runPipeline when not provided", async () => {
     const opts = makeOptions();
     const handler = generateRoutes(opts);
-    await handler({ method: "POST", url: "/" }, mockRes(), () => {});
+    await handler(postReq(), mockRes(), () => {});
     expect(opts.runPipeline).toHaveBeenCalledWith(
       expect.anything(),
       expect.not.objectContaining({
