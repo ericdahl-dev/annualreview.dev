@@ -4,22 +4,16 @@
  */
 
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import OpenAI from "openai";
-import { OpenAI as PostHogOpenAI } from "@posthog/ai/openai";
-import { PostHog } from "posthog-node";
 import { fitEvidenceToBudget, estimateTokens, slimContributions } from "./context-budget.js";
+import {
+  createNarrativeClient,
+  loadPrompt,
+  OPENROUTER_BASE,
+  resolveModel,
+  runNarrativeCompletion,
+} from "./narrative-model-runner.js";
 import type { Evidence } from "../types/evidence.js";
 import type { ThemesOutput, BulletsOutput, StoriesOutput, SelfEvalOutput } from "./generate-markdown.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = join(__dirname, "..", "prompts");
-
-function loadPrompt(name: string): string {
-  return readFileSync(join(PROMPTS_DIR, name), "utf8").trim();
-}
 
 const SYSTEM_PROMPT = loadPrompt("00_system.md");
 
@@ -60,65 +54,6 @@ const defaultCache = new PipelineCache();
 /** Clear the default result cache. Prefer injecting a fresh PipelineCache in tests. */
 export function clearPipelineCache(): void {
   defaultCache.clear();
-}
-
-// ── PostHog client factory ─────────────────────────────────────────────────────
-
-interface PostHogClientResult {
-  openai: OpenAI;
-  posthogOpts: Record<string, string | boolean>;
-  shutdown: () => Promise<void>;
-}
-
-function createOpenAiClient(
-  apiKey: string,
-  baseURL: string | undefined,
-  posthogTraceId: string | undefined,
-  posthogDistinctId: string | undefined
-): PostHogClientResult {
-  const posthogApiKey = process.env.POSTHOG_API_KEY;
-  const posthogClient = posthogApiKey
-    ? new PostHog(posthogApiKey, { host: process.env.POSTHOG_HOST || "https://us.i.posthog.com" })
-    : null;
-
-  const clientOpts: ConstructorParameters<typeof OpenAI>[0] = { apiKey };
-  if (baseURL) {
-    clientOpts.baseURL = baseURL;
-    clientOpts.defaultHeaders = {
-      "HTTP-Referer": "https://annualreview.dev",
-      "X-Title": "AnnualReview.dev",
-    };
-  }
-
-  const openai: OpenAI = posthogClient
-    ? new PostHogOpenAI({
-        ...clientOpts,
-        apiKey,
-        posthog: posthogClient,
-      } as ConstructorParameters<typeof PostHogOpenAI>[0]) as unknown as OpenAI
-    : new OpenAI(clientOpts);
-
-  const posthogOpts: Record<string, string | boolean> = {};
-  if (posthogTraceId != null) posthogOpts.posthogTraceId = posthogTraceId;
-  if (posthogDistinctId != null) posthogOpts.posthogDistinctId = posthogDistinctId;
-  if (posthogClient) posthogOpts.posthogCaptureImmediate = true;
-  if (posthogClient && baseURL?.includes("openrouter.ai")) posthogOpts.posthogProviderOverride = "openrouter";
-
-  return {
-    openai,
-    posthogOpts,
-    shutdown: () => (posthogClient ? posthogClient.shutdown() : Promise.resolve()),
-  };
-}
-
-// ── extractJson ────────────────────────────────────────────────────────────────
-
-/** Pull first {...} from LLM response text and parse as JSON. */
-export function extractJson(text: string): unknown {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}") + 1;
-  if (start === -1 || end === 0) throw new Error("No JSON object in response");
-  return JSON.parse(text.slice(start, end));
 }
 
 // ── Pipeline step definitions ──────────────────────────────────────────────────
@@ -279,14 +214,6 @@ export interface PipelineOptions {
   cache?: PipelineCache;
 }
 
-/** Default model ids for free and premium (OpenRouter). */
-export function getDefaultModels(): { free: string; premium: string } {
-  return {
-    free: process.env.LLM_MODEL ?? "anthropic/claude-3-haiku",
-    premium: process.env.PREMIUM_LLM_MODEL ?? "anthropic/claude-haiku-4.5",
-  };
-}
-
 /** Max user-message tokens by tier. Env override: MAX_USER_TOKENS_FREE, MAX_USER_TOKENS_PREMIUM. */
 export function getMaxUserTokensForTier(premium: boolean): number {
   const envKey = premium ? "MAX_USER_TOKENS_PREMIUM" : "MAX_USER_TOKENS_FREE";
@@ -297,8 +224,6 @@ export function getMaxUserTokensForTier(premium: boolean): number {
   }
   return premium ? 184_000 : 500_000;
 }
-
-const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 // ── Prompt loop ────────────────────────────────────────────────────────────────
 
@@ -317,7 +242,7 @@ export async function runPipeline(
 ): Promise<PipelineResult> {
   if (!apiKey) throw new Error("OPENROUTER_API_KEY required");
 
-  const resolvedModel = model ?? getDefaultModels()[premium ? "premium" : "free"];
+  const resolvedModel = resolveModel({ model, premium });
 
   const cached = cache.get(evidence, resolvedModel);
   if (cached) {
@@ -334,12 +259,12 @@ export async function runPipeline(
     return cached;
   }
 
-  const { openai, posthogOpts, shutdown } = createOpenAiClient(
+  const client = createNarrativeClient({
     apiKey,
     baseURL,
     posthogTraceId,
-    posthogDistinctId
-  );
+    posthogDistinctId,
+  });
 
   const total = STEPS.length;
 
@@ -376,25 +301,14 @@ export async function runPipeline(
       const stepStart = Date.now();
       const input = step.buildInput(evidence, previousResults);
       const promptContent = loadPrompt(step.promptFile);
-      const completion = await openai.chat.completions.create({
+      const { parsed: stepResult } = await runNarrativeCompletion({
+        client,
         model: resolvedModel,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `${promptContent}\n\nINPUT JSON:\n${input}` },
-        ],
-        ...posthogOpts,
+        promptContent,
+        inputJson: input,
+        systemPrompt: SYSTEM_PROMPT,
+        stepLabel: step.key,
       });
-      const rawContent = completion.choices[0]?.message?.content;
-      if (rawContent == null || (typeof rawContent === "string" && rawContent.trim() === "")) {
-        throw new Error(`Pipeline step "${step.key}" returned no content`);
-      }
-      let stepResult: unknown;
-      try {
-        stepResult = extractJson(rawContent);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new Error(`Step ${step.key} returned invalid JSON: ${msg}`);
-      }
       (previousResults as Record<string, unknown>)[step.key] = stepResult;
       prevStepMs = Date.now() - stepStart;
       prevStepPayloadTokens = estimateTokens(input);
@@ -411,6 +325,8 @@ export async function runPipeline(
     cache.set(evidence, resolvedModel, result);
     return result;
   } finally {
-    await shutdown();
+    await client.shutdown();
   }
 }
+
+export { getDefaultModels, extractJson } from "./narrative-model-runner.js";

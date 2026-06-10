@@ -5,7 +5,7 @@ import { defineConfig, loadEnv, type ConfigEnv, type ViteDevServer } from "vite"
 import react from "@vitejs/plugin-react";
 import { codecovVitePlugin } from "@codecov/vite-plugin";
 import { runPipeline } from "./lib/run-pipeline.js";
-import { collectAndNormalize } from "./lib/collect-and-normalize.js";
+import { intakeFromGitHub } from "./lib/evidence-intake.js";
 import { validateEvidence } from "./lib/validate-evidence.js";
 import {
   createJob,
@@ -40,7 +40,6 @@ import {
   readJsonBody,
   respondJson,
   randomState,
-  DATE_YYYY_MM_DD,
 } from "./server/helpers.js";
 import { authRoutes } from "./server/routes/auth.ts";
 import { jobsRoutes } from "./server/routes/jobs.ts";
@@ -159,7 +158,7 @@ function apiRoutesPlugin() {
           getSession,
           createJob,
           runInBackground,
-          collectAndNormalize,
+          intakeFromGitHub,
         })
       );
 
@@ -183,7 +182,7 @@ function apiRoutesPlugin() {
         periodicRoutes({
           getSessionIdFromRequest: getSessionId,
           getSession,
-          collectAndNormalize,
+          intakeFromGitHub,
         })
       );
     },

@@ -8,7 +8,7 @@ function makeOptions(overrides = {}) {
     getSession: () => undefined,
     createJob: vi.fn().mockReturnValue("job_1"),
     runInBackground: vi.fn(),
-    collectAndNormalize: vi.fn().mockResolvedValue({ contributions: [] }),
+    intakeFromGitHub: vi.fn().mockResolvedValue({ contributions: [] }),
     ...overrides,
   };
 }
@@ -66,11 +66,11 @@ describe("collectRoutes – POST /", () => {
   });
 
   it("prefers body token over session token when both are provided", async () => {
-    const collectAndNormalize = vi.fn().mockResolvedValue({ contributions: [] });
+    const intakeFromGitHub = vi.fn().mockResolvedValue({ contributions: [] });
     const opts = makeOptions({
       getSessionIdFromRequest: () => "sess_1",
       getSession: () => ({ access_token: "ghp_session_token", login: "user1" }),
-      collectAndNormalize,
+      intakeFromGitHub,
     });
     const handler = collectRoutes(opts);
     const req = mockReq("POST", "/", { start_date: "2025-01-01", end_date: "2025-12-31", token: "ghp_pat_token" });
@@ -79,7 +79,7 @@ describe("collectRoutes – POST /", () => {
     expect(res.statusCode).toBe(202);
     const bgFn = opts.runInBackground.mock.calls[0][1];
     await bgFn();
-    expect(collectAndNormalize).toHaveBeenCalledWith(expect.objectContaining({ token: "ghp_pat_token" }));
+    expect(intakeFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ token: "ghp_pat_token" }));
   });
 
   it("returns 500 on unexpected errors", async () => {

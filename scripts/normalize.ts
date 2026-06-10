@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { parseArgs as parseArgsBase } from "../lib/parse-args.ts";
+import { intakeFromRaw } from "../lib/evidence-intake.ts";
 import type { Contribution } from "../types/evidence.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -345,7 +346,10 @@ function main(): void {
     throw e;
   }
 
-  const evidence = normalize(raw, start ?? null, end ?? null);
+  const evidence = intakeFromRaw(raw, {
+    start_date: start ?? null,
+    end_date: end ?? null,
+  });
   writeFileSync(outputPath, JSON.stringify(evidence, null, 2), "utf8");
   console.log(
     "Wrote",

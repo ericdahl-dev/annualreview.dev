@@ -16,6 +16,13 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import type { SessionData } from "../../lib/session-store.js";
 import type { Evidence } from "../../types/evidence.js";
+import {
+  EvidenceIntakeError,
+  intakeFromGitHub,
+  parseTimeframe,
+  resolveGitHubToken,
+  type IntakeFromGitHubOptions,
+} from "../../lib/evidence-intake.js";
 import type {
   PeriodicSummary,
   PeriodicSummaryWithEvidence,
@@ -41,7 +48,7 @@ export interface PeriodicRoutesOptions {
   readJsonBody?: (req: IncomingMessage) => Promise<object>;
   getSessionIdFromRequest: (req: IncomingMessage) => string | null;
   getSession: (id: string) => SessionData | undefined;
-  collectAndNormalize: (opts: { token: string; start_date: string; end_date: string }) => Promise<Evidence>;
+  intakeFromGitHub?: (opts: IntakeFromGitHubOptions) => Promise<Evidence>;
   /** Injected for tests */
   runDailySummary?: (evidence: Evidence) => Promise<string>;
   runWeeklyRollup?: (weekStart: string, weekEnd: string, dailyJsons: string[]) => Promise<string>;
@@ -63,8 +70,9 @@ const DEFAULT_SUMMARIES_LIMIT = 90;
 const MAX_SUMMARIES_LIMIT = 365;
 
 export function periodicRoutes(options: PeriodicRoutesOptions) {
-  const { getSessionIdFromRequest, getSession, collectAndNormalize } = options;
+  const { getSessionIdFromRequest, getSession } = options;
   const readJsonBody = options.readJsonBody ?? defaultReadJsonBody;
+  const runIntake = options.intakeFromGitHub ?? intakeFromGitHub;
 
   async function getStore() {
     const allProvided =
@@ -155,21 +163,28 @@ export function periodicRoutes(options: PeriodicRoutesOptions) {
       const date = (body.date as string | undefined) ??
         new Date().toISOString().slice(0, 10);
 
-      if (!DATE_YYYY_MM_DD.test(date)) {
-        respondJson(res, 400, { error: "date must be YYYY-MM-DD" });
-        return;
-      }
-
       const sessId = getSessionIdFromRequest(req);
       const session = sessId ? getSession(sessId) : undefined;
-      const token = (body.token as string | undefined) ?? session?.access_token;
-      if (!token) {
-        respondJson(res, 401, { error: "GitHub token required (login with GitHub or pass token in body)" });
-        return;
+      let start_date: string;
+      let end_date: string;
+      let token: string;
+      try {
+        ({ start_date, end_date } = parseTimeframe(date, date));
+        token = resolveGitHubToken({
+          body: body.token,
+          session: session?.access_token,
+        });
+      } catch (e) {
+        if (e instanceof EvidenceIntakeError) {
+          const status = e.message.includes("token") ? 401 : 400;
+          respondJson(res, status, { error: e.message });
+          return;
+        }
+        throw e;
       }
 
       try {
-        const evidence = await collectAndNormalize({ token, start_date: date, end_date: date });
+        const evidence = await runIntake({ token, start_date, end_date });
         const summaryJson = await store.runDailySummary(evidence);
         const id = await store.saveDailySummary(userLogin, date, evidence, summaryJson);
         respondJson(res, 201, {

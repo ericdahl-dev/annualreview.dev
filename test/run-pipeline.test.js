@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { extractJson, runPipeline, clearPipelineCache, getMaxUserTokensForTier, PipelineCache } from "../lib/run-pipeline.js";
+import { runPipeline, clearPipelineCache, getMaxUserTokensForTier, PipelineCache } from "../lib/run-pipeline.js";
 
 const mockThemes = { themes: [{ theme_id: "t1", theme_name: "Reliability" }] };
 const mockBullets = { bullets_by_theme: [], top_10_bullets_overall: [] };
@@ -94,24 +94,6 @@ describe("getMaxUserTokensForTier", () => {
         process.env.MAX_USER_TOKENS_FREE = previousFree;
       }
     }
-  });
-});
-
-describe("extractJson", () => {
-  it("extracts a single JSON object", () => {
-    expect(extractJson('{"a":1}')).toEqual({ a: 1 });
-  });
-
-  it("strips leading and trailing text", () => {
-    expect(extractJson("Here is the result:\n{\"themes\":[]}\nDone.")).toEqual({ themes: [] });
-  });
-
-  it("uses first { and last } for nested object", () => {
-    expect(extractJson("x{\"nested\":{\"b\":2}}y")).toEqual({ nested: { b: 2 } });
-  });
-
-  it("throws when no object found", () => {
-    expect(() => extractJson("no json here")).toThrow("No JSON object");
   });
 });
 
