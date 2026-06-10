@@ -7,6 +7,7 @@
 import { writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { parseArgs as parseArgsBase } from "../lib/parse-args.ts";
+import { parseTimeframe, requireGitHubToken } from "../lib/evidence-intake.ts";
 
 const GITHUB_GRAPHQL = "https://api.github.com/graphql";
 
@@ -307,23 +308,23 @@ export async function collectRawGraphQL({
 }
 
 async function main(): Promise<void> {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    console.error("GITHUB_TOKEN required");
-    process.exit(1);
-  }
   const parsed = parseArgs();
-  const start = parsed.start as string | undefined;
-  const end = parsed.end as string | undefined;
   const output = parsed.output as string | undefined;
   const noReviews = parsed.noReviews as boolean | undefined;
-  if (!start || !end) {
-    console.error("--start YYYY-MM-DD and --end YYYY-MM-DD required");
+
+  let token: string;
+  let start_date: string;
+  let end_date: string;
+  try {
+    token = requireGitHubToken(process.env.GITHUB_TOKEN);
+    ({ start_date, end_date } = parseTimeframe(parsed.start, parsed.end));
+  } catch (e) {
+    console.error((e as Error).message);
     process.exit(1);
   }
   const raw = await collectRawGraphQL({
-    start,
-    end,
+    start: start_date,
+    end: end_date,
     noReviews: noReviews ?? false,
     token,
   });

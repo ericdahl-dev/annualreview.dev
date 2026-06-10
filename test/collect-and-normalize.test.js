@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { collectAndNormalize } from "../lib/collect-and-normalize.ts";
 
-describe("collectAndNormalize – validation", () => {
-  it("throws a descriptive error when normalize returns invalid evidence shape", async () => {
+describe("collectAndNormalize (deprecated alias)", () => {
+  it("delegates to evidence intake and throws on invalid evidence", async () => {
     vi.mock("../scripts/collect-github.ts", () => ({
       collectRawGraphQL: vi.fn().mockResolvedValue({}),
     }));

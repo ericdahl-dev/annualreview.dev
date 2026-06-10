@@ -18,7 +18,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const DIST = join(__dirname, "dist");
 
 import { runPipeline } from "./lib/run-pipeline.ts";
-import { collectAndNormalize } from "./lib/collect-and-normalize.ts";
+import { intakeFromGitHub } from "./lib/evidence-intake.ts";
 import { validateEvidence } from "./lib/validate-evidence.ts";
 import {
   createJob,
@@ -208,7 +208,7 @@ function handleRequest(
         getSession,
         createJob,
         runInBackground,
-        collectAndNormalize,
+        intakeFromGitHub,
       })(wrappedReq, res, next);
       return;
     }
@@ -223,7 +223,7 @@ function handleRequest(
       periodicRoutes({
         getSessionIdFromRequest: getSessionId,
         getSession,
-        collectAndNormalize,
+        intakeFromGitHub,
       })(wrappedReq, res, next);
       return;
     }
