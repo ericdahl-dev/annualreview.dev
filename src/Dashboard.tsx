@@ -52,8 +52,8 @@ function getLabel(s: PeriodicSummary): string {
 
 const PERIOD_COLORS: Record<string, string> = {
   daily: "var(--accent)",
-  weekly: "#7c9ef0",
-  monthly: "#c97ef5",
+  weekly: "var(--accent-cool)",
+  monthly: "var(--accent-warm)",
 };
 
 interface SummaryCardProps {
@@ -276,10 +276,8 @@ export default function Dashboard() {
       <main className="dashboard-content">
         <h1 className="dashboard-title">Contribution Tracking</h1>
         <p className="dashboard-subtitle">
-          Each day's contributions are collected and summarised by AI. Those daily
-          summaries roll up into weekly rollups, and weeklies roll up into monthly
-          summaries — giving you an always-current picture of your work to feed into
-          an annual review.
+          Collect daily evidence, roll it into weekly and monthly summaries, and
+          keep a usable review trail ready before review season starts.
         </p>
 
         {!authChecked ? null : !user ? (

@@ -28,6 +28,27 @@ const FEATURES = [
   },
 ];
 
+const SIGNALS = [
+  "PR-linked claims",
+  "CLI or browser flow",
+  "Needs-confirmation guardrails",
+];
+
+const TRUST_POINTS = [
+  {
+    title: "No hallucinated metrics",
+    desc: "If we can't link it to a PR, it doesn't appear in your review.",
+  },
+  {
+    title: "Flagged uncertainty",
+    desc: 'Unproven impact is labeled "needs confirmation" so you stay credible.',
+  },
+  {
+    title: "Your data, your machine",
+    desc: "Runs locally or on your infra. Nothing stored, nothing shared.",
+  },
+];
+
 const STEPS = [
   {
     verb: "Connect",
@@ -67,6 +88,9 @@ export default function Landing() {
 
   return (
     <div className="landing">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       {showStickyCta && (
         <div className="sticky-cta" role="banner">
           <div className="sticky-cta-inner">
@@ -104,6 +128,7 @@ export default function Landing() {
           <div className="nav-links">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
+            <span className="nav-note">Evidence-backed review writer</span>
             <a
               href="/generate"
               className="nav-cta"
@@ -117,71 +142,126 @@ export default function Landing() {
         </div>
       </nav>
 
-      <main>
-        {/* ── Hero ── */}
+      <main id="main-content">
         <section className="hero">
           <div className="hero-bg" aria-hidden="true" />
-          <div className="container hero-content">
-            <p className="hero-kicker">GitHub → evidence → narrative</p>
-            <h1 className="hero-title">
-              Stop putting off
-              <br />
-              your self-review.
-            </h1>
-            <p className="hero-sub">
-              You shipped all year. You shouldn't have to spend a week proving
-              it. <strong>Free, no signup.</strong> Sign in with GitHub, use a
-              token, or run the CLI. Get themes, bullets, STAR stories, and
-              self-eval sections—every claim linked to a real PR. Optionally add
-              your annual goals to tailor the report to what you're being
-              measured on.
-            </p>
-            <div className="hero-actions">
-              <a
-                href="/generate"
-                className="btn btn-primary btn-lg"
-                onClick={() =>
-                  posthog?.capture("cta_clicked", { location: "hero" })
-                }
-              >
-                Generate my review
-                <span className="btn-arrow">→</span>
-              </a>
-              <a href="#how" className="hero-secondary-link">
-                See how it works
-              </a>
+          <div className="container hero-grid">
+            <div className="hero-copy">
+              <p className="hero-kicker">GitHub → evidence → narrative</p>
+              <h1 className="hero-title">
+                Stop putting off
+                <br />
+                your self-review.
+              </h1>
+              <p className="hero-sub">
+                You shipped all year. You shouldn't have to spend a week proving
+                it. <strong>Free, no signup.</strong> Sign in with GitHub, use a
+                token, or run the CLI. Get themes, bullets, STAR stories, and
+                self-eval sections, with every claim linked to a real PR.
+                Optionally add your annual goals so the report matches what
+                you're being measured on.
+              </p>
+              <div className="hero-actions">
+                <a
+                  href="/generate"
+                  className="btn btn-primary btn-lg"
+                  onClick={() =>
+                    posthog?.capture("cta_clicked", { location: "hero" })
+                  }
+                >
+                  Generate my review
+                  <span className="btn-arrow">→</span>
+                </a>
+                <a href="#how" className="hero-secondary-link">
+                  See how it works
+                </a>
+              </div>
+              <div className="hero-signals" aria-label="Key product traits">
+                {SIGNALS.map((signal) => (
+                  <span key={signal} className="hero-signal">
+                    {signal}
+                  </span>
+                ))}
+              </div>
             </div>
+            <aside className="hero-panel" aria-label="Review output preview">
+              <div className="hero-panel-top">
+                <span className="hero-panel-label">Output preview</span>
+                <span className="hero-panel-state">PR-backed</span>
+              </div>
+              <div className="hero-panel-summary">
+                <p className="hero-panel-kicker">What the app does</p>
+                <h2 className="hero-panel-title">
+                  Pulls a review narrative out of work that already happened.
+                </h2>
+                <p className="hero-panel-desc">
+                  Group related pull requests, shape them into manager-readable
+                  bullets, and keep weak claims clearly labeled.
+                </p>
+              </div>
+              <div className="hero-panel-stack">
+                <div className="hero-panel-item">
+                  <span className="hero-panel-item-label">Theme</span>
+                  <p>Platform reliability work surfaced as one coherent thread.</p>
+                </div>
+                <div className="hero-panel-item">
+                  <span className="hero-panel-item-label">Bullet</span>
+                  <p>
+                    Hardened webhook delivery with retry logic and linked the
+                    claim to the PR that shipped it.
+                  </p>
+                </div>
+                <div className="hero-panel-item hero-panel-item-warning">
+                  <span className="hero-panel-item-label">Guardrail</span>
+                  <p>Potential impact (needs confirmation)</p>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
 
-        {/* ── Social proof bar ── */}
         <section className="proof-bar">
-          <div className="container">
+          <div className="container proof-bar-inner">
             <p className="proof-text">
               Free · No signup · Your data stays yours. Built for ICs, tech
               leads, and contractors who'd rather ship code than write about it.
             </p>
-          </div>
-        </section>
-
-        {/* ── Features ── */}
-        <section id="features" className="section">
-          <div className="container">
-            <p className="section-kicker">What you get</p>
-            <h2 className="section-title">Four outputs. Zero guesswork.</h2>
-            <div className="feature-grid">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="feature-card">
-                  <span className="feature-icon">{f.icon}</span>
-                  <h3 className="feature-name">{f.title}</h3>
-                  <p className="feature-desc">{f.desc}</p>
-                </div>
-              ))}
+            <div className="proof-tags" aria-hidden="true">
+              <span>PR links</span>
+              <span>STAR stories</span>
+              <span>Markdown export</span>
             </div>
           </div>
         </section>
 
-        {/* ── Before / After ── */}
+        <section id="features" className="section">
+          <div className="container">
+            <p className="section-kicker">What you get</p>
+            <h2 className="section-title">Four outputs. Zero guesswork.</h2>
+            <div className="feature-layout">
+              <div className="feature-intro">
+                <p className="feature-intro-title">
+                  Built for the awkward part of engineering work.
+                </p>
+                <p className="feature-intro-copy">
+                  Annual reviews usually fail because the evidence is scattered
+                  and the narrative gets written too late. This product keeps
+                  the raw proof attached while making the final output usable.
+                </p>
+              </div>
+              <div className="feature-grid">
+                {FEATURES.map((f) => (
+                  <div key={f.title} className="feature-card">
+                    <span className="feature-icon">{f.icon}</span>
+                    <h3 className="feature-name">{f.title}</h3>
+                    <p className="feature-desc">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="section section-alt">
           <div className="container">
             <p className="section-kicker">The transformation</p>
@@ -206,17 +286,17 @@ export default function Landing() {
                     <strong>Platform Reliability</strong>
                   </p>
                   <p>
-                    Improved webhook delivery success rate by adding retry logic
-                    with exponential backoff, reducing failed deliveries across 3
-                    integration partners.
+                    Hardened webhook delivery by adding retry logic with
+                    exponential backoff and linked the claim to the PR that
+                    shipped it.
                     <span className="evidence-tag">PR #412</span>
                   </p>
                   <p>
                     <strong>Architecture</strong>
                   </p>
                   <p>
-                    Led extraction of billing service from the monolith, enabling
-                    independent deployment and reducing blast radius.
+                    Extracted billing service boundaries into a cleaner story a
+                    manager can skim without reading a commit log.
                     <span className="evidence-tag">PR #389</span>
                   </p>
                 </div>
@@ -225,11 +305,17 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── How it works ── */}
         <section id="how" className="section">
-          <div className="container">
-            <p className="section-kicker">4 steps, 5 minutes</p>
-            <h2 className="section-title">How it works</h2>
+          <div className="container process-layout">
+            <div className="process-intro">
+              <p className="section-kicker">4 steps, 5 minutes</p>
+              <h2 className="section-title">How it works</h2>
+              <p className="process-copy">
+                The workflow stays simple on purpose: collect evidence once,
+                then turn it into reusable review material instead of retyping
+                the same story for every form.
+              </p>
+            </div>
             <ol className="steps">
               {STEPS.map((s, i) => (
                 <li key={s.verb} className="step">
@@ -244,37 +330,27 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── Trust ── */}
         <section className="section section-alt">
-          <div className="container trust-container">
-            <p className="section-kicker">Why trust this</p>
-            <h2 className="section-title">Evidence-only. Always.</h2>
+          <div className="container trust-layout">
+            <div className="trust-lead">
+              <p className="section-kicker">Why trust this</p>
+              <h2 className="section-title">Evidence-only. Always.</h2>
+              <p className="trust-copy">
+                The app is opinionated about one thing: your annual review
+                should be more credible after using it, not less.
+              </p>
+            </div>
             <div className="trust-grid">
-              <div className="trust-item">
-                <strong>No hallucinated metrics</strong>
-                <p>
-                  If we can't link it to a PR, it doesn't appear in your
-                  review.
-                </p>
-              </div>
-              <div className="trust-item">
-                <strong>Flagged uncertainty</strong>
-                <p>
-                  Unproven impact is labeled
-                  <em> "needs confirmation"</em> so you stay credible.
-                </p>
-              </div>
-              <div className="trust-item">
-                <strong>Your data, your machine</strong>
-                <p>
-                  Runs locally or on your infra. Nothing stored, nothing shared.
-                </p>
-              </div>
+              {TRUST_POINTS.map((item) => (
+                <div key={item.title} className="trust-item">
+                  <strong>{item.title}</strong>
+                  <p>{item.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* ── Final CTA ── */}
         <section className="final-cta">
           <div className="container">
             <h2 className="final-cta-title">
@@ -303,6 +379,10 @@ export default function Landing() {
           </a>
           <p className="footer-sub">
             For engineers who ship more than they self-promote.{" "}
+            <a href="/privacy.html">Privacy</a>
+            {" · "}
+            <a href="/terms.html">Terms</a>
+            {" · "}
             <a
               href="https://github.com/Skeyelab/annualreview.com"
               target="_blank"

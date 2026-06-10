@@ -11,7 +11,7 @@
 }
 
 .container {
-  max-width: 64rem;
+  max-width: 72rem;
   margin: 0 auto;
   padding: 0 1.5rem;
   width: 100%;
@@ -26,10 +26,16 @@
   font-family: var(--font-sans);
   font-weight: 600;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
   text-decoration: none;
+  justify-content: center;
 }
 
 .btn-sm {
@@ -38,22 +44,24 @@
 }
 
 .btn-lg {
-  padding: 0.85rem 1.75rem;
+  padding: 0.95rem 1.75rem;
   font-size: 0.95rem;
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-  box-shadow: 0 0 24px rgba(201, 162, 39, 0.15), 0 1px 2px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+  color: #1f1710;
+  border-color: rgba(255, 235, 206, 0.28);
+  box-shadow:
+    0 16px 34px rgba(203, 148, 64, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .btn-primary:hover {
-  background: #d4ad2e;
-  border-color: #d4ad2e;
-  color: var(--bg);
-  box-shadow: 0 0 32px rgba(201, 162, 39, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4);
+  color: #1f1710;
+  box-shadow:
+    0 22px 40px rgba(203, 148, 64, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
   transform: translateY(-1px);
 }
 
@@ -66,35 +74,43 @@
 }
 
 .btn-ghost {
-  background: transparent;
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
   border-color: var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .btn-ghost:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 /* ─── Card / panel ─── */
 
 .card {
-  background: var(--bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 40px var(--shadow);
 }
 
 /* ─── Forms ─── */
 
 .input-base {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.7rem 0.9rem;
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  background: var(--bg);
+  background: rgba(14, 12, 10, 0.7);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 14px;
   color: var(--text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-base::placeholder {
@@ -109,15 +125,18 @@
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text);
-  background: var(--bg-elevated);
+  background: rgba(14, 12, 10, 0.72);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 18px;
   resize: vertical;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.input-base:focus,
 .textarea-base:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: rgba(240, 201, 138, 0.45);
+  box-shadow: 0 0 0 4px rgba(203, 148, 64, 0.12);
 }
 
 /* ─── Typography ─── */
@@ -125,25 +144,30 @@
 .kicker,
 .section-kicker {
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
+  text-transform: none;
+  letter-spacing: 0.12em;
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 700;
   margin: 0 0 0.75rem;
+  opacity: 0.92;
 }
 
 .section-title {
-  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4.3vw, 3.5rem);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   margin: 0 0 2.5rem;
   color: var(--text);
+  text-wrap: balance;
 }
 
 .mono {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .text-muted {
@@ -162,8 +186,8 @@
   font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.45;
-  background: var(--bg-elevated);
+  background: rgba(14, 12, 10, 0.76);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 18px;
   overflow: auto;
 }

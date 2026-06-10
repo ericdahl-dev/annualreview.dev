@@ -37,6 +37,12 @@
   justify-content: space-between;
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  background: rgba(20, 17, 15, 0.78);
 }
 
 .generate-logo {
@@ -44,7 +50,8 @@
   align-items: center;
   gap: 0.5rem;
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .generate-logo:hover {
@@ -128,22 +135,26 @@
 
 .generate-main {
   flex: 1;
-  max-width: 66rem;
+  max-width: 72rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  padding: 2.5rem 1.5rem 4rem;
   width: 100%;
 }
 
 .generate-title {
-  font-size: 1.75rem;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5vw, 4rem);
   font-weight: 700;
-  margin: 0 0 0.5rem;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  margin: 0 0 0.65rem;
 }
 
 .generate-lead {
   color: var(--text-muted);
-  margin: 0 0 1rem;
-  font-size: 0.95rem;
+  margin: 0 0 1.5rem;
+  font-size: 1rem;
+  max-width: 42rem;
 }
 
 .generate-lead code {
@@ -158,9 +169,14 @@
 .generate-get-data {
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: var(--bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 24px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 36px var(--shadow);
 }
 
 .generate-get-data-title {
@@ -172,23 +188,22 @@
 
 .generate-get-data-tabs {
   display: flex;
-  gap: 0;
+  gap: 0.3rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
 .generate-get-data-tab {
-  padding: 0.6rem 1rem;
+  padding: 0.72rem 1rem;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-muted);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   font-family: var(--font-sans);
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
 .generate-get-data-tab:hover {
@@ -196,8 +211,9 @@
 }
 
 .generate-get-data-tab-active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--text);
+  border-color: rgba(203, 148, 64, 0.26);
+  background: rgba(203, 148, 64, 0.08);
 }
 
 .generate-get-data-panels {
@@ -205,10 +221,10 @@
 }
 
 .generate-option-card {
-  padding: 1rem;
+  padding: 1.1rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+  border-radius: 20px;
+  background: rgba(13, 11, 9, 0.46);
 }
 
 .generate-option-heading {
@@ -244,12 +260,12 @@
 
 .generate-collect-input {
   width: 100%;
-  padding: 0.5rem 0.75rem;
+  padding: 0.7rem 0.9rem;
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  background: var(--bg);
+  background: rgba(10, 9, 8, 0.7);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 14px;
   color: var(--text);
 }
 
@@ -273,24 +289,25 @@
 }
 
 .generate-collect-date {
-  padding: 0.35rem 0.5rem;
+  padding: 0.5rem 0.7rem;
   font-size: 0.85rem;
-  background: var(--bg);
+  background: rgba(10, 9, 8, 0.7);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 12px;
   color: var(--text);
 }
 
 .generate-collect-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.7rem 1.1rem;
   font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--bg);
-  background: var(--accent);
-  border: none;
-  border-radius: 6px;
+  font-weight: 700;
+  color: #1f1710;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+  border: 1px solid rgba(255, 235, 206, 0.18);
+  border-radius: 999px;
   cursor: pointer;
   align-self: flex-start;
+  box-shadow: 0 12px 24px rgba(203, 148, 64, 0.16);
 }
 
 .generate-collect-btn:hover:not(:disabled) {
@@ -327,9 +344,9 @@
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
   font-family: var(--font-mono);
-  background: var(--bg);
+  background: rgba(10, 9, 8, 0.72);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 16px;
   overflow-x: auto;
   white-space: pre;
 }
@@ -357,12 +374,12 @@
 }
 
 .generate-sample-btn {
-  padding: 0.35rem 0.75rem;
+  padding: 0.5rem 0.85rem;
   font-size: 0.85rem;
-  color: var(--text-muted);
-  background: transparent;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -391,9 +408,9 @@
   font-size: 0.85rem;
   line-height: 1.5;
   color: var(--text);
-  background: var(--bg-elevated);
+  background: rgba(10, 9, 8, 0.72);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 20px;
   resize: vertical;
   margin-bottom: 1rem;
 }
@@ -433,9 +450,13 @@
 }
 
 .generate-error {
-  color: #e57373;
+  color: #f0a68b;
   margin: 0 0 1rem;
   font-size: 0.9rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(210, 122, 78, 0.22);
+  border-radius: 16px;
+  background: rgba(210, 122, 78, 0.08);
 }
 
 .generate-progress {
@@ -475,21 +496,22 @@
 }
 
 .generate-btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.85rem 1.4rem;
   min-height: 2.75rem;
   font-family: var(--font-sans);
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--bg);
-  background: var(--accent);
-  border: none;
-  border-radius: 6px;
+  font-weight: 700;
+  color: #1f1710;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+  border: 1px solid rgba(255, 235, 206, 0.2);
+  border-radius: 999px;
   cursor: pointer;
   flex: 1 1 0;
   min-width: 0;
   justify-content: center;
   display: inline-flex;
   align-items: center;
+  box-shadow: 0 16px 28px rgba(203, 148, 64, 0.16);
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -531,13 +553,13 @@
 }
 
 .generate-btn-premium {
-  background: #7c3aed;
-  color: #fff;
+  background: linear-gradient(135deg, #9fb0cb, #6f83a5);
+  color: #16130f;
   gap: 0.5rem;
 }
 
 .generate-btn-premium:hover:not(:disabled) {
-  background: #6d28d9;
+  background: linear-gradient(135deg, #a9b8d0, #7387a7);
 }
 
 .generate-btn-inner {
@@ -568,9 +590,9 @@
   padding: 0.15rem 0.5rem;
   font-size: 0.75rem;
   font-weight: 700;
-  background: #7c3aed;
-  color: #fff;
-  border-radius: 4px;
+  background: rgba(140, 162, 196, 0.22);
+  color: var(--accent-cool);
+  border-radius: 999px;
   vertical-align: middle;
   letter-spacing: 0.03em;
 }
@@ -582,8 +604,10 @@
 }
 
 .generate-result h2 {
-  font-size: 1.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
   margin: 0 0 1rem;
+  letter-spacing: -0.04em;
 }
 
 .generate-section {
@@ -604,12 +628,12 @@
 }
 
 .generate-copy {
-  padding: 0.35rem 0.75rem;
+  padding: 0.5rem 0.85rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -623,9 +647,9 @@
   font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.45;
-  background: var(--bg-elevated);
+  background: rgba(10, 9, 8, 0.72);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 18px;
   overflow: auto;
   max-height: 20rem;
 }
@@ -643,13 +667,13 @@
 }
 
 .generate-download-btn {
-  padding: 0.35rem 0.75rem;
+  padding: 0.5rem 0.85rem;
   font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--bg);
-  background: var(--accent);
-  border: none;
-  border-radius: 4px;
+  font-weight: 700;
+  color: #1f1710;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+  border: 1px solid rgba(255, 235, 206, 0.2);
+  border-radius: 999px;
   cursor: pointer;
 }
 
@@ -663,9 +687,11 @@
 
 .generate-report-rendered {
   padding: 1.25rem 1.5rem;
-  background: var(--bg-elevated);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.012)),
+    var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 20px;
   overflow: auto;
   max-height: 40rem;
   line-height: 1.6;
