@@ -1,20 +1,16 @@
 // Page: 1) Get GitHub data (OAuth or token or CLI), 2) Paste/upload evidence JSON, 3) Generate → themes, bullets, stories, self-eval.
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import "./Generate.css";
 import { generateMarkdown } from "../lib/generate-markdown.js";
 import type { Timeframe } from "../types/evidence.js";
 import { posthog } from "./posthog";
-import { parseJsonResponse, pollJob } from "./api.js";
 import { useAuth } from "./hooks/useAuth";
 import { useGitHubCollect } from "./hooks/useGitHubCollect";
 import { useSnapshots } from "./hooks/useSnapshots";
+import { useGenerateWorkspace } from "./workspaces/generate";
 import CollectForm from "./CollectForm";
 import NarrativeView, { type NarrativeViewProps } from "./NarrativeView";
-import { PAYMENTS_NOT_CONFIGURED } from "../lib/api-error-codes.js";
-
-/** Milliseconds to wait for React state to settle before auto-generating after Stripe redirect. */
-const STRIPE_RETURN_DELAY_MS = 100;
 
 const GITHUB_TOKEN_URL =
   "https://github.com/settings/tokens/new?scopes=repo&description=AnnualReview.dev";
@@ -40,116 +36,15 @@ interface PipelineResultLike {
 
 export default function Generate() {
   const { user, authChecked, logout } = useAuth();
-  const [evidenceText, setEvidenceText] = useState("");
-  const [goals, setGoals] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [result, setResult] = useState<PipelineResultLike | null>(null);
-  const [isPremiumResult, setIsPremiumResult] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [paymentsEnabled, setPaymentsEnabled] = useState(false);
-  const [creditsPerPurchase, setCreditsPerPurchase] = useState(5);
-  const [priceCents, setPriceCents] = useState(100);
-  const [freeModel, setFreeModel] = useState<string>("");
-  const [premiumModel, setPremiumModel] = useState<string>("");
-  /** Credits remaining for the stored Stripe session ID, or null if unknown. */
-  const [premiumCredits, setPremiumCredits] = useState<number | null>(null);
-
-  /** Snapshot save state */
-  const [snapshotPeriod, setSnapshotPeriod] = useState<"daily" | "weekly" | "monthly" | "custom">("weekly");
-  const [snapshotLabel, setSnapshotLabel] = useState("");
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
-  const [snapshotSaved, setSnapshotSaved] = useState(false);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-
   const { saveSnapshot } = useSnapshots({ user });
+  const ws = useGenerateWorkspace({ user, saveSnapshot });
 
-  const onEvidenceReceived = useCallback((text: string) => {
-    setEvidenceText(text);
-    setError(null);
-  }, []);
+  const onEvidenceReceived = useCallback(
+    (text: string) => ws.setEvidenceTextClearingError(text),
+    [ws]
+  );
 
   const [dataTab, setDataTab] = useState<"app" | "token" | "terminal">("app");
-  const [authError, setAuthError] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("error") === "auth_failed") {
-      setAuthError(true);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-    // After returning from Stripe, persist session ID to localStorage for reuse across sessions.
-    const sessionId = params.get("session_id");
-    const isPremium = params.get("premium") === "1";
-    if (sessionId && isPremium) {
-      window.history.replaceState({}, "", window.location.pathname);
-      try { localStorage.setItem("premium_stripe_session_id", sessionId); } catch { /* ignore */ }
-      // Also store in sessionStorage so the post-redirect auto-generate effect picks it up.
-      try { sessionStorage.setItem("stripe_session_id", sessionId); } catch { /* ignore */ }
-    }
-  }, []);
-
-  // Load a snapshot or merged evidence from URL params / sessionStorage
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    // Load merged evidence passed via sessionStorage from the Dashboard merge action
-    if (params.get("from_snapshot_merge") === "1") {
-      window.history.replaceState({}, "", window.location.pathname);
-      let merged: string | null = null;
-      try { merged = sessionStorage.getItem("merged_evidence"); } catch { /* ignore */ }
-      if (merged) {
-        try { sessionStorage.removeItem("merged_evidence"); } catch { /* ignore */ }
-        setEvidenceText(merged);
-        setError(null);
-      }
-      return;
-    }
-
-    // Load a single snapshot by id
-    const snapshotId = params.get("snapshot_id");
-    if (snapshotId) {
-      window.history.replaceState({}, "", window.location.pathname);
-      fetch(`/api/snapshots/${snapshotId}`, { credentials: "include" })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data: { evidence?: unknown } | null) => {
-          if (data?.evidence) {
-            setEvidenceText(JSON.stringify(data.evidence, null, 2));
-            setError(null);
-          }
-        })
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/payments/config")
-      .then((res) => (res.ok ? res.json() : { enabled: false }))
-      .then((data: {
-        enabled?: boolean;
-        credits_per_purchase?: number;
-        price_cents?: number;
-        free_model?: string;
-        premium_model?: string;
-      }) => {
-        setPaymentsEnabled(!!data.enabled);
-        if (data.credits_per_purchase != null) setCreditsPerPurchase(data.credits_per_purchase);
-        if (data.price_cents != null) setPriceCents(data.price_cents);
-        if (data.free_model) setFreeModel(data.free_model);
-        if (data.premium_model) setPremiumModel(data.premium_model);
-      })
-      .catch(() => setPaymentsEnabled(false));
-  }, []);
-
-  // Fetch remaining credits when payments are enabled and user is logged in (session cookie identifies user)
-  useEffect(() => {
-    if (!paymentsEnabled || !user) return;
-    fetch("/api/payments/credits", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : { credits: 0 }))
-      .then((data: { credits?: number }) => setPremiumCredits(data.credits ?? 0))
-      .catch(() => setPremiumCredits(0));
-  }, [paymentsEnabled, user]);
 
   const {
     collectStart,
@@ -165,268 +60,24 @@ export default function Generate() {
     handleFetchGitHub,
   } = useGitHubCollect({ onEvidenceReceived });
 
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/jobs", { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((data: { latest?: { status?: string; result?: unknown } }) => {
-        const job = data.latest;
-        if (job?.status === "done" && job.result) {
-          setEvidenceText(JSON.stringify(job.result, null, 2));
-          setError(null);
-        }
-      })
-      .catch(() => {});
-  }, [user]);
-
-  const handleGenerate = async (
-    stripeSessionId?: string,
-    evidenceOverride?: string,
-    goalsOverride?: string
-  ) => {
-    const textToUse = evidenceOverride ?? evidenceText;
-    const goalsToUse = goalsOverride ?? goals;
-    let evidence: Record<string, unknown>;
-    try {
-      evidence = JSON.parse(textToUse) as Record<string, unknown>;
-    } catch {
-      const looksTruncated =
-        /[\{\[,]\s*$/.test(textToUse.trim()) ||
-        !textToUse.includes('"contributions"');
-      setError(
-        looksTruncated
-          ? 'Invalid JSON—looks truncated (e.g. missing contributions or closing brackets). Try "Upload evidence.json" instead of pasting, or paste the full file again.'
-          : "Invalid JSON. Paste or upload a valid evidence.json."
-      );
-      return;
-    }
-    const tf = evidence.timeframe as { start_date?: string; end_date?: string } | undefined;
-    if (
-      !tf?.start_date ||
-      !tf?.end_date ||
-      !Array.isArray(evidence.contributions)
-    ) {
-      setError(
-        "Evidence must have timeframe.start_date, timeframe.end_date, and contributions array."
-      );
-      return;
-    }
-    if (
-      (goalsToUse as string).trim() &&
-      !(evidence as { goals?: string }).goals
-    ) {
-      evidence = { ...evidence, goals: (goalsToUse as string).trim() };
-    }
-    if (stripeSessionId) {
-      evidence = { ...evidence, _stripe_session_id: stripeSessionId };
-    }
-    const posthogDistinctId = posthog?.get_distinct_id?.();
-    if (posthogDistinctId) {
-      const posthogTraceId =
-        globalThis.crypto?.randomUUID?.() ??
-        `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      evidence = {
-        ...evidence,
-        posthog_distinct_id: posthogDistinctId,
-        posthog_trace_id: posthogTraceId,
-      };
-    }
-    setError(null);
-    setLoading(true);
-    setResult(null);
-    setIsPremiumResult(false);
-    setProgress("");
-    posthog?.capture("review_generate_started", { premium: !!stripeSessionId });
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(evidence),
-      });
-      const data = (await parseJsonResponse(res)) as {
-        job_id?: string;
-        premium?: boolean;
-        error?: string;
-        [key: string]: unknown;
-      };
-      if (res.status === 202 && data.job_id) {
-        const out = await pollJob(data.job_id, setProgress);
-        setResult(out as PipelineResultLike);
-        setIsPremiumResult(!!data.premium);
-        // Update displayed credit count if the server returned updated remaining credits
-        if (typeof data.credits_remaining === "number") {
-          setPremiumCredits(data.credits_remaining);
-        }
-        posthog?.capture("review_generate_completed", { premium: !!data.premium });
-      } else if (!res.ok) {
-        if ((data as { code?: string }).code === PAYMENTS_NOT_CONFIGURED) {
-          throw new Error("Premium generation is not available in this environment. Please use the free tier.");
-        }
-        throw new Error((data.error as string) || "Generate failed");
-      } else {
-        setResult(data as PipelineResultLike);
-        posthog?.capture("review_generate_completed");
-      }
-    } catch (e) {
-      const err = e as Error;
-      posthog?.capture("review_generate_failed", { error: err.message });
-      setError(err.message || "Pipeline failed. Is OPENROUTER_API_KEY set?");
-    } finally {
-      setLoading(false);
-      setProgress("");
-    }
-  };
-
-  const handleUsePremiumCredit = () => {
-    let sessionId: string | null = null;
-    try { sessionId = localStorage.getItem("premium_stripe_session_id"); } catch { /* ignore */ }
-    if (!sessionId) return;
-    handleGenerate(sessionId);
-  };
-
-  const handleUpgradeToPremium = async () => {
-    // Check we have valid evidence before redirecting to payment
-    try {
-      const ev = JSON.parse(evidenceText) as Record<string, unknown>;
-      const tf = ev.timeframe as { start_date?: string; end_date?: string } | undefined;
-      if (!tf?.start_date || !tf?.end_date || !Array.isArray(ev.contributions)) {
-        setError("Please load your evidence data first, then upgrade.");
-        return;
-      }
-    } catch {
-      setError("Please load your evidence data first, then upgrade.");
-      return;
-    }
-    setError(null);
-    // Save evidence so it survives the Stripe redirect
-    try {
-      sessionStorage.setItem("premium_evidence", evidenceText);
-      if (goals.trim()) sessionStorage.setItem("premium_goals", goals);
-    } catch {
-      // sessionStorage not available (unlikely in browser, ignore)
-    }
-    try {
-      const res = await fetch("/api/payments/checkout", { method: "POST" });
-      const data = (await parseJsonResponse(res)) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || "Could not start checkout");
-      }
-      posthog?.capture("premium_checkout_started");
-      window.location.href = data.url;
-    } catch (e) {
-      setError((e as Error).message || "Payment service unavailable. Try again later.");
-    }
-  };
-
-  // After returning from Stripe, restore evidence and auto-generate premium report
-  useEffect(() => {
-    let savedSessionId: string | null = null;
-    try { savedSessionId = sessionStorage.getItem("stripe_session_id"); } catch { /* ignore */ }
-    if (!savedSessionId) return;
-    try { sessionStorage.removeItem("stripe_session_id"); } catch { /* ignore */ }
-    let savedEvidence: string | null = null;
-    let savedGoals: string | null = null;
-    try { savedEvidence = sessionStorage.getItem("premium_evidence"); } catch { /* ignore */ }
-    try { savedGoals = sessionStorage.getItem("premium_goals"); } catch { /* ignore */ }
-    if (savedEvidence) {
-      try { sessionStorage.removeItem("premium_evidence"); } catch { /* ignore */ }
-      setEvidenceText(savedEvidence);
-    }
-    if (savedGoals) {
-      try { sessionStorage.removeItem("premium_goals"); } catch { /* ignore */ }
-      setGoals(savedGoals);
-    }
-    if (savedEvidence) {
-      // Use saved evidence/goals directly; state updates are async and may not be visible yet
-      const timer = setTimeout(
-        () => handleGenerate(savedSessionId!, savedEvidence!, savedGoals ?? undefined),
-        STRIPE_RETURN_DELAY_MS
-      );
-      return () => clearTimeout(timer);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const r = new FileReader();
-    r.onload = () => {
-      setEvidenceText(r.result as string);
-      setError(null);
-    };
-    r.readAsText(file);
-  };
-
-  const loadSample = async () => {
-    try {
-      const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
-      const res = await fetch(`${base}sample-evidence.json`);
-      if (!res.ok) throw new Error(`Sample not found (${res.status})`);
-      const data = await parseJsonResponse(res);
-      setEvidenceText(JSON.stringify(data, null, 2));
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message || "Could not load sample.");
-    }
-  };
-
   const handleLogout = () => {
     posthog?.capture("logout");
     logout();
   };
 
-  const handleDownloadReport = () => {
-    let timeframe: Timeframe | undefined;
-    try {
-      const ev = JSON.parse(evidenceText) as { timeframe?: Timeframe };
-      timeframe = ev.timeframe;
-    } catch {
-      // no timeframe available
-    }
-    const md = generateMarkdown(
-      result as Parameters<typeof generateMarkdown>[0],
-      { timeframe }
-    );
-    const blob = new Blob([md], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "annual-review-report.md";
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    ws.handleFile(e.target.files?.[0]);
   };
 
-  const handleSaveSnapshot = async () => {
-    setSnapshotError(null);
-    setSnapshotSaved(false);
-    let ev: Record<string, unknown>;
-    try {
-      ev = JSON.parse(evidenceText) as Record<string, unknown>;
-    } catch {
-      setSnapshotError("Invalid JSON — load or paste evidence first.");
-      return;
-    }
-    const tf = ev.timeframe as { start_date?: string; end_date?: string } | undefined;
-    if (!tf?.start_date || !tf?.end_date) {
-      setSnapshotError("Evidence must have timeframe.start_date and timeframe.end_date.");
-      return;
-    }
-    setSnapshotSaving(true);
-    const id = await saveSnapshot({
-      period: snapshotPeriod,
-      start_date: tf.start_date,
-      end_date: tf.end_date,
-      evidence: ev as object,
-      label: snapshotLabel.trim() || undefined,
-    });
-    setSnapshotSaving(false);
-    if (id) {
-      setSnapshotSaved(true);
-      setSnapshotLabel("");
-      posthog?.capture("snapshot_saved", { period: snapshotPeriod });
-    }
-  };
+  const {
+    payments: {
+      enabled: paymentsEnabled,
+      creditsPerPurchase,
+      priceCents,
+      freeModel,
+      premiumModel,
+    },
+  } = ws;
 
   return (
     <div className="generate">
@@ -462,7 +113,7 @@ export default function Generate() {
       <main className="generate-main">
         <h1 className="generate-title">Generate review</h1>
 
-        {authError && (
+        {ws.authError && (
           <div className="generate-error" role="alert">
             GitHub sign-in didn’t complete. For local dev, add this callback URL
             to your GitHub OAuth app:{" "}
@@ -685,14 +336,14 @@ yarn normalize --input raw.json --output evidence.json`}
             <input
               type="file"
               accept=".json,application/json"
-              onChange={handleFile}
+              onChange={handleFileInput}
               className="generate-file-input"
             />
           </label>
           <button
             type="button"
             className="generate-sample-btn"
-            onClick={loadSample}
+            onClick={() => void ws.loadSample()}
           >
             Try sample
           </button>
@@ -700,10 +351,10 @@ yarn normalize --input raw.json --output evidence.json`}
         <textarea
           className="generate-textarea"
           placeholder='{"timeframe": {"start_date": "2025-01-01", "end_date": "2025-12-31"}, "contributions": [...]}'
-          value={evidenceText}
+          value={ws.evidenceText}
           onChange={(e) => {
-            setEvidenceText(e.target.value);
-            setError(null);
+            ws.setEvidenceText(e.target.value);
+            ws.setError(null);
           }}
           rows={8}
           spellCheck={false}
@@ -727,8 +378,8 @@ yarn normalize --input raw.json --output evidence.json`}
             placeholder={
               "One goal per line, e.g.:\nImprove system reliability\nGrow as a technical leader\nShip the new onboarding flow"
             }
-            value={goals}
-            onChange={(e) => setGoals(e.target.value)}
+            value={ws.goals}
+            onChange={(e) => ws.setGoals(e.target.value)}
             rows={4}
             spellCheck={false}
           />
@@ -738,8 +389,7 @@ yarn normalize --input raw.json --output evidence.json`}
           </p>
         </div>
 
-        {/* Save as Snapshot — only shown for logged-in users once evidence is loaded */}
-        {authChecked && user && evidenceText.trim() && (
+        {authChecked && user && ws.evidenceText.trim() && (
           <div className="generate-snapshot-section">
             <h2 className="generate-step-title generate-snapshot-title">
               Save as snapshot{" "}
@@ -753,8 +403,8 @@ yarn normalize --input raw.json --output evidence.json`}
             <div className="generate-snapshot-row">
               <select
                 className="generate-collect-input generate-snapshot-period"
-                value={snapshotPeriod}
-                onChange={(e) => setSnapshotPeriod(e.target.value as typeof snapshotPeriod)}
+                value={ws.snapshotPeriod}
+                onChange={(e) => ws.setSnapshotPeriod(e.target.value as typeof ws.snapshotPeriod)}
                 aria-label="Snapshot period"
               >
                 <option value="daily">Daily</option>
@@ -766,21 +416,21 @@ yarn normalize --input raw.json --output evidence.json`}
                 type="text"
                 className="generate-collect-input generate-snapshot-label-input"
                 placeholder="Label (optional, e.g. Q1 2025)"
-                value={snapshotLabel}
-                onChange={(e) => setSnapshotLabel(e.target.value)}
+                value={ws.snapshotLabel}
+                onChange={(e) => ws.setSnapshotLabel(e.target.value)}
                 aria-label="Snapshot label"
               />
               <button
                 type="button"
                 className="generate-collect-btn generate-snapshot-btn"
-                onClick={handleSaveSnapshot}
-                disabled={snapshotSaving}
+                onClick={() => void ws.saveSnapshot()}
+                disabled={ws.snapshotSaving}
               >
-                {snapshotSaving ? "Saving…" : "Save snapshot"}
+                {ws.snapshotSaving ? "Saving…" : "Save snapshot"}
               </button>
             </div>
-            {snapshotError && <p className="generate-error">{snapshotError}</p>}
-            {snapshotSaved && (
+            {ws.snapshotError && <p className="generate-error">{ws.snapshotError}</p>}
+            {ws.snapshotSaved && (
               <p className="generate-snapshot-saved">
                 ✓ Snapshot saved.{" "}
                 <a href="/dashboard">View all snapshots →</a>
@@ -789,25 +439,25 @@ yarn normalize --input raw.json --output evidence.json`}
           </div>
         )}
 
-        {error && <p className="generate-error">{error}</p>}
+        {ws.error && <p className="generate-error">{ws.error}</p>}
 
-        <div className="generate-actions" aria-busy={loading}>
-          {loading ? (
+        <div className="generate-actions" aria-busy={ws.loading}>
+          {ws.loading ? (
             <div className="generate-actions-progress">
               <div
                 className="generate-progress-bar"
                 role="progressbar"
                 aria-label="Generating review"
-                aria-valuetext={progress || undefined}
+                aria-valuetext={ws.progress || undefined}
               />
-              {progress && <p className="generate-progress">{progress}</p>}
+              {ws.progress && <p className="generate-progress">{ws.progress}</p>}
             </div>
           ) : (
             <div className="generate-actions-buttons">
               <button
                 type="button"
                 className="generate-btn"
-                onClick={() => handleGenerate()}
+                onClick={() => void ws.generate()}
               >
                 <span className="generate-btn-inner">
                   <span>{paymentsEnabled ? "3. Generate review (free)" : "3. Generate review"}</span>
@@ -815,24 +465,24 @@ yarn normalize --input raw.json --output evidence.json`}
                 </span>
               </button>
               {paymentsEnabled && (
-                premiumCredits !== null && premiumCredits > 0 ? (
+                ws.premiumCredits !== null && ws.premiumCredits > 0 ? (
                   <button
                     type="button"
                     className="generate-btn generate-btn-premium"
-                    onClick={handleUsePremiumCredit}
+                    onClick={ws.usePremiumCredit}
                     title={`Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model`}
                   >
                     <span className="generate-btn-inner">
                       <span>✦ Generate premium report</span>
                       {premiumModel && <span className="generate-btn-model">{formatModelName(premiumModel)}</span>}
-                      <span className="generate-btn-credits">{premiumCredits} credit{premiumCredits !== 1 ? "s" : ""} left</span>
+                      <span className="generate-btn-credits">{ws.premiumCredits} credit{ws.premiumCredits !== 1 ? "s" : ""} left</span>
                     </span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     className="generate-btn generate-btn-premium"
-                    onClick={handleUpgradeToPremium}
+                    onClick={() => void ws.upgradeToPremium()}
                     title={`${creditsPerPurchase} credits for $${(priceCents / 100).toFixed(2)} (1 run = 1 credit). Uses ${premiumModel ? formatModelName(premiumModel) : "premium"} model.`}
                   >
                     <span className="generate-btn-inner">
@@ -846,19 +496,19 @@ yarn normalize --input raw.json --output evidence.json`}
           )}
         </div>
 
-        {result && (
+        {ws.result && (
           <div className="generate-result">
             <h2>
               Your review
-              {isPremiumResult && (
+              {ws.isPremiumResult && (
                 <span className="generate-premium-badge">✦ Premium</span>
               )}
             </h2>
-            <NarrativeView {...(result as NarrativeViewProps)} />
+            <NarrativeView {...(ws.result as NarrativeViewProps)} />
             <ReportSection
-              result={result}
-              evidenceText={evidenceText}
-              onDownload={handleDownloadReport}
+              result={ws.result}
+              evidenceText={ws.evidenceText}
+              onDownload={ws.downloadReport}
             />
           </div>
         )}
